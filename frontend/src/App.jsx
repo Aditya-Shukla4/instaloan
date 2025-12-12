@@ -32,11 +32,15 @@ function App() {
   const processBotResponse = async (userInput) => {
     try {
       setIsTyping(true);
-      const response = await fetch("http://localhost:5000/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userInput }),
-      });
+      // UDPATE 1: Chat API URL updated
+      const response = await fetch(
+        "https://instaloan-ap7e.onrender.com/api/chat",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: userInput }),
+        }
+      );
       const data = await response.json();
 
       let botMsg = {
@@ -49,7 +53,8 @@ function App() {
 
       if (data.action === "download_sanction") {
         botMsg.actionLabel = "Download Sanction Letter";
-        botMsg.actionUrl = `http://localhost:5000/api/download-sanction?amount=${data.amount}`;
+        // UPDATE 2: Download Link updated
+        botMsg.actionUrl = `https://instaloan-ap7e.onrender.com/api/download-sanction?amount=${data.amount}`;
       } else if (data.action === "upload_docs") {
         botMsg.actionLabel = "Upload Salary Slip";
         setCurrentAmount(data.amount);
@@ -58,13 +63,15 @@ function App() {
       setIsTyping(false);
       setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
+      console.error("Error connecting to backend:", error);
       setIsTyping(false);
     }
   };
 
   // --- ADMIN ACTIONS ---
   const handleAdminAction = async (id, action) => {
-    await fetch("http://localhost:5000/api/admin/action", {
+    // UPDATE 3: Admin Action URL updated
+    await fetch("https://instaloan-ap7e.onrender.com/api/admin/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, action }),
@@ -73,7 +80,10 @@ function App() {
   };
 
   const fetchAdminData = async () => {
-    const res = await fetch("http://localhost:5000/api/admin/applications");
+    // UPDATE 4: Admin Fetch URL updated
+    const res = await fetch(
+      "https://instaloan-ap7e.onrender.com/api/admin/applications"
+    );
     setAdminData(await res.json());
   };
 

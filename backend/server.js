@@ -22,8 +22,6 @@ const groq = new Groq({
 
 let applications = [];
 
-// --- 🛡️ 1. DETERMINISTIC RISK ENGINE (The "Legal" Brain) ---
-// --- 🛡️ 1. DETERMINISTIC RISK ENGINE (Cheat Codes for Demo) ---
 class CreditRiskEngine {
   static evaluate(amount) {
     let creditScore;
