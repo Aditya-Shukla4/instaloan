@@ -1,16 +1,16 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
 
+/* --- GLOBAL LAYOUT --- */
 body {
   margin: 0;
   font-family: "Inter", sans-serif;
-  background-color: #f3f4f6; /* Light Gray Background */
+  background-color: #f3f4f6;
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
 }
 
-/* --- MAIN LAYOUT --- */
 .main-wrapper {
   width: 100%;
   display: flex;
@@ -20,7 +20,7 @@ body {
 
 .chat-container {
   width: 100%;
-  max-width: 420px; /* Mobile width */
+  max-width: 420px; /* Mobile width look */
   height: 95vh;
   background: #ffffff;
   border-radius: 20px;
@@ -32,6 +32,7 @@ body {
   position: relative;
 }
 
+/* --- TOGGLE BUTTON (Chat <-> Admin) --- */
 .toggle-view-btn {
   position: absolute;
   top: 20px;
@@ -47,11 +48,13 @@ body {
   gap: 8px;
   z-index: 100;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  font-size: 13px;
+  font-weight: 500;
 }
 
-/* --- HEADER --- */
+/* --- HEADER SECTION --- */
 .header {
-  background: #2563eb; /* Trustworthy Blue */
+  background: #2563eb;
   color: white;
   padding: 20px;
   display: flex;
@@ -89,7 +92,7 @@ body {
 /* --- PRE-APPROVAL BANNER --- */
 .pre-approval-banner {
   background: linear-gradient(90deg, #fffbeb, #fef3c7);
-  padding: 8px 15px;
+  padding: 10px 15px;
   font-size: 12px;
   color: #92400e;
   border-bottom: 1px solid #fcd34d;
@@ -99,18 +102,7 @@ body {
   animation: slideDown 0.5s ease-out;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* --- CHAT AREA --- */
+/* --- CHAT MESSAGES --- */
 .chat-window {
   flex: 1;
   padding: 20px;
@@ -124,25 +116,13 @@ body {
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 80%;
+  max-width: 85%;
   animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .message-wrapper.bot {
   align-self: flex-start;
 }
-
 .message-wrapper.user {
   align-self: flex-end;
   align-items: flex-end;
@@ -151,7 +131,7 @@ body {
 .bubble {
   padding: 12px 16px;
   border-radius: 16px;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   position: relative;
@@ -170,7 +150,7 @@ body {
   border-bottom-right-radius: 4px;
 }
 
-/* --- BUTTONS IN CHAT --- */
+/* --- CHAT INTERACTIVE ELEMENTS --- */
 .action-btn {
   padding: 10px;
   background-color: #eff6ff;
@@ -179,7 +159,7 @@ body {
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -191,6 +171,85 @@ body {
 
 .action-btn:hover {
   background-color: #dbeafe;
+}
+
+/* Suggestion Chips */
+.suggestion-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chip-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chip-btn:hover {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+/* --- EMI CALCULATOR CARD --- */
+.emi-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-top: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  min-width: 240px;
+  width: 100%;
+}
+
+.emi-header {
+  background: #f8fafc;
+  padding: 10px 15px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.emi-header span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.emi-amount {
+  font-weight: 700;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.emi-details {
+  padding: 12px 15px;
+}
+.emi-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: #334155;
+}
+.emi-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 8px 0;
+}
+.emi-row.total {
+  font-weight: 700;
+  color: #0f172a;
 }
 
 /* --- INPUT AREA & MIC --- */
@@ -220,11 +279,10 @@ input:focus {
   background: white;
 }
 
-.send-btn {
+.send-btn,
+.mic-btn {
   width: 45px;
   height: 45px;
-  background-color: #2563eb;
-  color: white;
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -234,32 +292,22 @@ input:focus {
   transition: transform 0.1s;
 }
 
+.send-btn {
+  background-color: #2563eb;
+  color: white;
+}
 .send-btn:active {
   transform: scale(0.95);
 }
 
 .mic-btn {
   background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   color: #64748b;
-  transition: all 0.2s;
 }
-
 .mic-btn:hover {
   background-color: #f1f5f9;
   color: #2563eb;
   transform: scale(1.1);
-}
-
-.mic-btn:active {
-  background-color: #e2e8f0;
-  transform: scale(0.95);
 }
 
 /* --- AGENT VISUALIZATION (LOADER) --- */
@@ -270,10 +318,10 @@ input:focus {
   background: #f0f9ff;
   border: 1px solid #bae6fd;
   color: #0369a1;
-  padding: 12px 16px;
+  padding: 10px 15px;
   border-radius: 12px;
   margin: 10px 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   width: fit-content;
   animation: fadeIn 0.3s ease-in;
@@ -288,26 +336,6 @@ input:focus {
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* --- ADMIN PANEL --- */
 .admin-container {
   width: 100%;
@@ -320,11 +348,11 @@ input:focus {
   flex-direction: column;
 }
 
-/* --- METRICS DASHBOARD --- */
+/* Metrics Dashboard */
 .metrics-dashboard {
   display: flex;
-  gap: 15px;
-  padding: 20px 20px 0 20px;
+  gap: 12px;
+  padding: 20px;
   flex-wrap: wrap;
   background: #f8fafc;
 }
@@ -332,10 +360,10 @@ input:focus {
 .metric-card {
   background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 15px;
+  border-radius: 10px;
+  padding: 12px;
   flex: 1;
-  min-width: 140px;
+  min-width: 130px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -349,8 +377,8 @@ input:focus {
 }
 
 .metric-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -363,56 +391,51 @@ input:focus {
   color: #0f172a;
   line-height: 1.2;
 }
-
 .metric-title {
   font-size: 11px;
   color: #64748b;
   font-weight: 500;
 }
 
-/* --- ADMIN TABLE --- */
+/* Admin Table */
 .table-wrapper {
   padding: 20px;
   overflow-x: auto;
 }
-
 .admin-table {
   width: 100%;
   border-collapse: collapse;
 }
-
 .admin-table th {
   text-align: left;
   padding: 12px;
   background: #f1f5f9;
   color: #475569;
-  font-size: 14px;
+  font-size: 13px;
 }
-
 .admin-table td {
   padding: 12px;
   border-bottom: 1px solid #e2e8f0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
+/* Status Badges */
 .status-badge {
   padding: 4px 8px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
 }
-
 .status-badge.success {
   background: #dcfce7;
   color: #166534;
 }
-
 .status-badge.pending {
   background: #fef9c3;
   color: #854d0e;
 }
 
-/* --- ADMIN ACTION BUTTONS --- */
+/* Admin Buttons */
 .icon-btn {
   width: 28px;
   height: 28px;
@@ -424,48 +447,120 @@ input:focus {
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .icon-btn.approve {
   background: #dcfce7;
   color: #166534;
 }
-
 .icon-btn.approve:hover {
   background: #bbf7d0;
 }
-
 .icon-btn.reject {
   background: #fee2e2;
   color: #991b1b;
 }
-
 .icon-btn.reject:hover {
   background: #fecaca;
 }
 
-/* --- SUGGESTION CHIPS --- */
-.suggestion-container {
+/* --- PLAN CARDS --- */
+.plans-container {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   margin-top: 10px;
+  overflow-x: auto;
+  padding-bottom: 5px;
 }
 
-.chip-btn {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #334155;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+.plan-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px;
+  min-width: 100px;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  text-align: center;
 }
 
-.chip-btn:hover {
-  background: #2563eb;
-  color: white;
+.plan-card:hover {
   border-color: #2563eb;
-  transform: translateY(-1px);
+  background-color: #eff6ff;
+  transform: translateY(-2px);
+}
+
+.plan-tenure {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.plan-emi {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2563eb;
+  margin: 4px 0;
+}
+
+.plan-total {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* Ensure Mic Button is visible */
+.mic-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  cursor: pointer;
+  color: #64748b;
+  background: transparent;
+  border: none;
+}
+.mic-btn:hover {
+  background: #f1f5f9;
+  border-radius: 50%;
+  color: #2563eb;
+}
+
+/* --- ANIMATIONS --- */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }

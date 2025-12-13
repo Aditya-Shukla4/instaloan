@@ -12,18 +12,20 @@ import {
   AlertTriangle,
   Clock,
   Mic,
+  Zap,
   TrendingUp,
   ShieldAlert,
-  Zap,
+  Cpu, // New Icon for Source
 } from "lucide-react";
 
 function App() {
   const [view, setView] = useState("chat");
+  // 🔥 UPDATED INITIAL STATE FOR HONESTY
   const [messages, setMessages] = useState([
     {
       sender: "bot",
-      text: "Namaste! InstaLoan mein swagat hai. Are you looking for a Personal Loan or Student Loan?",
-      suggestions: ["Personal Loan", "Student Loan"], // Initial Suggestions
+      text: "Namaste! InstaLoan mein swagat hai. How can I help you today?",
+      suggestions: ["Personal Loan", "Student Loan (Info)"],
       timestamp: "Now",
     },
   ]);
@@ -32,8 +34,8 @@ function App() {
   const [currentAmount, setCurrentAmount] = useState(null);
   const [adminData, setAdminData] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [expandedRow, setExpandedRow] = useState(null);
   const [agentStatus, setAgentStatus] = useState("");
+  const [expandedRow, setExpandedRow] = useState(null);
 
   // --- 🎙️ VOICE INPUT LOGIC ---
   const startListening = () => {
@@ -45,7 +47,7 @@ function App() {
       recognition.interimResults = false;
 
       setIsTyping(true);
-      setAgentStatus("🎙️ Listening to you...");
+      setAgentStatus("🎙️ Listening...");
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
@@ -57,23 +59,22 @@ function App() {
       recognition.onerror = () => {
         setIsTyping(false);
         setAgentStatus("");
-        alert("Mic access error. Check browser permissions.");
+        alert("Mic access error.");
       };
 
       recognition.start();
     } else {
-      alert("Browser does not support Voice API. Chrome use kar bhai.");
+      alert("Use Chrome for Voice features.");
     }
   };
 
   // --- 🤖 CHAT LOGIC ---
   const processBotResponse = async (userInput) => {
     try {
-      // PHASE 1: Sales Agent
       setIsTyping(true);
       setAgentStatus("🕵️ Sales Agent: Understanding Intent...");
 
-      // NOTE: Ensure URL matches your backend
+      // Ensure URL matches your backend
       const response = await fetch("http://localhost:5000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,26 +82,30 @@ function App() {
       });
       const data = await response.json();
 
-      // PHASE 2: Risk Agent (Theatre) - Only if loan intent detected
-      if (data.amount > 0) {
-        setAgentStatus("👮 Risk Agent: Checking Credit Bureau & Fraud DB...");
-        await new Promise((r) => setTimeout(r, 1200));
-
-        // PHASE 3: Compliance Agent
-        setAgentStatus("⚖️ Compliance Agent: Generating Audit Report...");
+      // --- VISUAL FEEDBACK (THEATRE) ---
+      if (data.action === "show_plans") {
+        setAgentStatus("🧮 Advisor Agent: Structuring Plans...");
         await new Promise((r) => setTimeout(r, 1000));
+      } else if (
+        data.reply.includes("Approved") ||
+        data.reply.includes("Rejected")
+      ) {
+        setAgentStatus("👮 Risk Agent: Analyzing Credit Score...");
+        await new Promise((r) => setTimeout(r, 1200));
+        setAgentStatus("⚖️ Compliance Agent: Finalizing...");
+        await new Promise((r) => setTimeout(r, 800));
       }
 
-      // PHASE 4: Final Result
-      setAgentStatus("✅ Finalizing Decision...");
-      await new Promise((r) => setTimeout(r, 500));
+      setAgentStatus("✅ Responding...");
+      await new Promise((r) => setTimeout(r, 400));
 
       let botMsg = {
         sender: "bot",
         text: data.reply,
         action: data.action,
         amount: data.amount,
-        suggestions: data.suggestions, // 🔥 Capture Suggestions from Backend
+        suggestions: data.suggestions,
+        loanPlans: data.loanPlans,
         timestamp: "Now",
       };
 
@@ -116,18 +121,39 @@ function App() {
       setAgentStatus("");
       setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
-      console.error("Error connecting to backend:", error);
+      console.error("Backend Error:", error);
       setIsTyping(false);
       setAgentStatus("");
-      // Fallback message if server is down
+      // 🔥 CLEAR FALLBACK MESSAGE FOR UX
       setMessages((prev) => [
         ...prev,
         {
           sender: "bot",
-          text: "⚠️ System Offline. Switching to Offline Mode (Regex)...",
+          text: "⚠️ AI Service Unavailable. Switching to Offline Rule-Engine.",
         },
       ]);
     }
+  };
+
+  // --- HANDLE PLAN SELECTION ---
+  const handlePlanClick = (amount, months) => {
+    const userText = `Proceed with ${amount} for ${months} months`;
+    setMessages((prev) => [
+      ...prev,
+      { sender: "user", text: `Selected: ${months} Months Plan` },
+    ]);
+    processBotResponse(userText);
+  };
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+    setMessages((prev) => [
+      ...prev,
+      { sender: "user", text: input, timestamp: "Now" },
+    ]);
+    const userInput = input;
+    setInput("");
+    processBotResponse(userInput);
   };
 
   // --- ADMIN ACTIONS ---
@@ -153,18 +179,20 @@ function App() {
   useEffect(() => {
     if (view === "admin") fetchAdminData();
   }, [view]);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping, agentStatus]);
 
-  // --- FILE UPLOAD ---
+  // File Upload Logic
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     setMessages((prev) => [
       ...prev,
       { sender: "user", text: `📎 Uploaded: ${file.name}`, timestamp: "Now" },
     ]);
     setIsTyping(true);
-    setAgentStatus("📄 Document Agent: Verifying File...");
+    setAgentStatus("📄 Document Agent: Verifying...");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -176,11 +204,9 @@ function App() {
         body: formData,
       });
       const data = await response.json();
-
       await new Promise((r) => setTimeout(r, 1000));
       setIsTyping(false);
       setAgentStatus("");
-
       setMessages((prev) => [
         ...prev,
         {
@@ -189,7 +215,6 @@ function App() {
           action: data.action,
           actionLabel: "Download Sanction Letter",
           actionUrl: `http://localhost:5000/api/download-sanction?amount=${data.amount}`,
-          timestamp: "Now",
         },
       ]);
     } catch (error) {
@@ -197,21 +222,6 @@ function App() {
       setAgentStatus("");
     }
   };
-
-  const handleSend = () => {
-    if (!input.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { sender: "user", text: input, timestamp: "Now" },
-    ]);
-    const userInput = input;
-    setInput("");
-    processBotResponse(userInput);
-  };
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, agentStatus]);
 
   return (
     <div className="main-wrapper">
@@ -241,11 +251,9 @@ function App() {
             </div>
           </div>
 
-          {/* 🔥 PRE-APPROVAL BANNER 🔥 */}
           <div className="pre-approval-banner">
             <span>
-              🎁 <b>Pre-Approved Offer:</b> You are eligible for up to ₹80,000
-              instantly!
+              🎁 <b>Pre-Approved:</b> Eligible for ₹80,000 instantly! *T&C Apply
             </span>
           </div>
 
@@ -253,9 +261,36 @@ function App() {
             {messages.map((msg, idx) => (
               <div key={idx} className={`message-wrapper ${msg.sender}`}>
                 <div className="bubble">
-                  {msg.text}
+                  {/* 🔥 UPDATED: Pre-line style for Disclaimer formatting */}
+                  <div style={{ whiteSpace: "pre-line" }}>{msg.text}</div>
 
-                  {/* Action Button (Download/Upload) */}
+                  {/* Plan Cards */}
+                  {msg.loanPlans && (
+                    <div className="plans-container">
+                      {msg.loanPlans.map((plan, i) => (
+                        <div
+                          key={i}
+                          className="plan-card"
+                          onClick={() =>
+                            handlePlanClick(msg.amount, plan.months)
+                          }
+                        >
+                          <div className="plan-tenure">
+                            {plan.months} Months
+                          </div>
+                          <div className="plan-emi">
+                            ₹{plan.emi.toLocaleString()}
+                            <span style={{ fontSize: "10px" }}>/mo</span>
+                          </div>
+                          <div className="plan-total">
+                            Total: ₹{(plan.total / 1000).toFixed(1)}k
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
                   {msg.actionLabel && (
                     <button
                       className="action-btn"
@@ -270,8 +305,8 @@ function App() {
                     </button>
                   )}
 
-                  {/* 🔥 NEW: SUGGESTION CHIPS (Guided Choice) 🔥 */}
-                  {msg.suggestions && msg.suggestions.length > 0 && (
+                  {/* Suggestion Chips */}
+                  {msg.suggestions && (
                     <div className="suggestion-container">
                       {msg.suggestions.map((s, i) => (
                         <button
@@ -279,7 +314,7 @@ function App() {
                           className="chip-btn"
                           onClick={() => {
                             setInput(s);
-                            processBotResponse(s); // Auto-send when clicked
+                            processBotResponse(s);
                           }}
                         >
                           {s}
@@ -311,7 +346,7 @@ function App() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Type or Speak..."
+              placeholder="Type amount (e.g. 50k)..."
             />
             <button className="send-btn" onClick={handleSend}>
               <Send size={20} />
@@ -324,13 +359,13 @@ function App() {
           />
         </div>
       ) : (
-        // --- ADMIN PANEL ---
+        // --- UPGRADED ADMIN PANEL ---
         <div className="admin-container">
           <div
             className="header"
             style={{ background: "#0f172a", justifyContent: "space-between" }}
           >
-            <h2>🏦 Agentic Lending OS</h2>
+            <h2>🏦 Lending OS Admin</h2>
             <button
               onClick={fetchAdminData}
               style={{
@@ -344,7 +379,7 @@ function App() {
             </button>
           </div>
 
-          {/* 🔥 METRICS DASHBOARD 🔥 */}
+          {/* Metrics Dashboard */}
           <div className="metrics-dashboard">
             <div className="metric-card">
               <div
@@ -401,9 +436,10 @@ function App() {
               <thead>
                 <tr>
                   <th>Amt</th>
+                  <th>Tenure</th>
                   <th>Risk Score</th>
+                  <th>Source</th>
                   <th>Status</th>
-                  <th>AI Analysis</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -417,6 +453,7 @@ function App() {
                       }}
                     >
                       <td>₹{app.amount}</td>
+                      <td>{app.tenure ? `${app.tenure}M` : "-"}</td>
                       <td>
                         <span
                           style={{
@@ -427,6 +464,38 @@ function App() {
                           {app.riskScore}
                         </span>
                       </td>
+
+                      {/* 🔥 NEW SOURCE COLUMN: AI vs RULE */}
+                      <td>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            fontWeight: "600",
+                            background:
+                              app.decisionSource === "AI_AGENT"
+                                ? "#f3e8ff"
+                                : "#e0f2fe",
+                            color:
+                              app.decisionSource === "AI_AGENT"
+                                ? "#6b21a8"
+                                : "#0369a1",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            width: "fit-content",
+                          }}
+                        >
+                          {app.decisionSource === "AI_AGENT" ? (
+                            <Cpu size={10} />
+                          ) : (
+                            <Zap size={10} />
+                          )}
+                          {app.decisionSource === "AI_AGENT" ? "AI" : "Rule"}
+                        </span>
+                      </td>
+
                       <td>
                         <div
                           className={`status-badge ${
@@ -459,42 +528,13 @@ function App() {
                             gap: "5px",
                           }}
                         >
-                          <FileText size={14} /> View Logic
+                          <FileText size={14} /> Info
                         </button>
-                      </td>
-                      <td>
-                        {app.status.includes("PENDING") && (
-                          <div style={{ display: "flex", gap: "10px" }}>
-                            <button
-                              onClick={() =>
-                                handleAdminAction(app.id, "APPROVE")
-                              }
-                              className="icon-btn approve"
-                              title="Force Approve"
-                            >
-                              <Check size={16} />
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleAdminAction(app.id, "REJECT")
-                              }
-                              className="icon-btn reject"
-                              title="Force Reject"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        )}
-                        {app.status.includes("Manual") && (
-                          <span style={{ fontSize: "10px", color: "#64748b" }}>
-                            Admin Override
-                          </span>
-                        )}
                       </td>
                     </tr>
                     {expandedRow === app.id && (
                       <tr>
-                        <td colSpan="5" style={{ padding: "0" }}>
+                        <td colSpan="6" style={{ padding: "0" }}>
                           <div
                             style={{
                               background: "#f8fafc",
@@ -574,6 +614,35 @@ function App() {
                                     ? app.auditData.complianceNote
                                     : "Audit Pending..."}
                                 </p>
+                                {/* Admin Actions inside Detail View */}
+                                {app.status.includes("PENDING") && (
+                                  <div
+                                    style={{
+                                      marginTop: "10px",
+                                      display: "flex",
+                                      gap: "10px",
+                                    }}
+                                  >
+                                    <button
+                                      onClick={() =>
+                                        handleAdminAction(app.id, "APPROVE")
+                                      }
+                                      className="icon-btn approve"
+                                      title="Force Approve"
+                                    >
+                                      <Check size={16} /> Force Approve
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleAdminAction(app.id, "REJECT")
+                                      }
+                                      className="icon-btn reject"
+                                      title="Force Reject"
+                                    >
+                                      <X size={16} /> Force Reject
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

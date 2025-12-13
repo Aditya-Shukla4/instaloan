@@ -6,7 +6,7 @@ const fs = require("fs");
 const multer = require("multer");
 const Groq = require("groq-sdk");
 
-// IMPORT AGENTS (The New Brains)
+// IMPORT AGENTS
 const RiskAgent = require("./agents/RiskAgent");
 const ComplianceAgent = require("./agents/ComplianceAgent");
 
@@ -22,16 +22,90 @@ const upload = multer({ dest: "uploads/" });
 // API KEY
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// INITIALIZE AGENTS
+// AGENTS
 const riskAgent = new RiskAgent();
 const complianceAgent = new ComplianceAgent();
 
-// DATA STORE (In-Memory Database)
+// DB
 let applications = [];
 
-
+// --- 🧠 HYBRID BRAIN (FIXED: NO MORE HALLUCINATIONS) ---
 async function analyzeLoanRequest(userText) {
   try {
+    const lowerText = userText.toLowerCase();
+
+    // ------------------------------------------------------
+    // 1️⃣ RULE ENGINE: HANDLE CHIP CLICKS (Personal/Student)
+    // ------------------------------------------------------
+    if (
+      lowerText.includes("personal loan") ||
+      lowerText.includes("student loan")
+    ) {
+      return {
+        intent: "CHAT",
+        amount: 0,
+        reply:
+          "Great choice! To start, please tell me the Amount you need? (e.g. 50k, 2 Lakh)",
+        suggestions: ["50k", "1 Lakh", "5 Lakh"], // Next logical chips
+      };
+    }
+
+    // ------------------------------------------------------
+    // 2️⃣ RULE ENGINE: DETECT PLAN SELECTION (Final Step)
+    // ------------------------------------------------------
+    const proceedMatch = userText.match(/Proceed with (\d+) for (\d+) months/i);
+    if (proceedMatch) {
+      return {
+        intent: "LOAN_CONFIRM",
+        amount: parseInt(proceedMatch[1]),
+        tenure: parseInt(proceedMatch[2]),
+        reply: "Locking plan & initiating Risk Analysis...",
+        source: "RULE_ENGINE",
+      };
+    }
+
+    // ------------------------------------------------------
+    // 3️⃣ RULE ENGINE: DETECT LOAN AMOUNT & SHOW PLANS
+    // ------------------------------------------------------
+    const amountMatch = userText.match(/(\d+)\s*(k|lakh)?/i);
+
+    // Sirf tab trigger karo jab amount ho, aur user 'rate' ya 'interest' na pooch raha ho
+    if (
+      amountMatch &&
+      !lowerText.includes("rate") &&
+      !lowerText.includes("interest")
+    ) {
+      let amount = 50000;
+      if (amountMatch) {
+        const unit = amountMatch[2] ? amountMatch[2].toLowerCase() : "";
+        const num = parseInt(amountMatch[1]);
+        if (unit === "k") amount = num * 1000;
+        else if (unit.includes("lakh")) amount = num * 100000;
+        else amount = num;
+      }
+
+      // Generate 3 Plans
+      const rate = 14 / 12 / 100;
+      const plans = [12, 24, 36].map((months) => {
+        const emi = Math.round(
+          (amount * rate * Math.pow(1 + rate, months)) /
+            (Math.pow(1 + rate, months) - 1)
+        );
+        return { months, emi, total: emi * months };
+      });
+
+      return {
+        intent: "SHOW_PLANS",
+        amount: amount,
+        reply: `For ₹${amount.toLocaleString()}, here are indicative plans:\n\n*Disclaimer: Rates are subject to credit checks & bank policy.*`,
+        loanPlans: plans,
+        source: "RULE_ENGINE",
+      };
+    }
+
+    // ------------------------------------------------------
+    // 4️⃣ AI AGENT (Strict Instructions)
+    // ------------------------------------------------------
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       response_format: { type: "json_object" },
@@ -39,129 +113,93 @@ async function analyzeLoanRequest(userText) {
         {
           role: "system",
           content: `
-            Role: Proactive Senior Loan Officer for 'InstaLoan Prime'.
-            Goal: Guide the user to apply for a loan. Be helpful, short, and conversational (Hinglish allowed).
+            Role: Honest Senior Loan Officer.
+            Goal: Guide user to give an AMOUNT. Do NOT give general info.
             
             Rules:
-            1. If user is VAGUE (e.g., "Hi", "Loan chahiye"):
-               - Do NOT assume amount.
-               - Proactively suggest: "Namaste! Are you looking for a Personal Loan or Student Loan?"
-               - Or suggest amounts: "Most users start with ₹50,000. Would that work?"
-               - Output: { "intent": "CHAT", "amount": 0, "reply": "...", "suggestions": ["₹50,000 Personal Loan", "₹2 Lakh Student Loan"] }
-
-            2. If user asks for INFO (e.g., "Interest kitna hai?", "EMI kya hogi?"):
-               - Provide estimates (NOT promises).
-               - "Typically 12-14% p.a. rehta hai depending on profile."
-               - "For ₹50k, approx EMI is ₹4,500/month."
-               - Output: { "intent": "CHAT", "amount": 0, "reply": "..." }
-
-            3. If user gives SPECIFIC intent (e.g., "50k chahiye", "I want 1 lakh"):
-               - Extract amount.
-               - Output: { "intent": "LOAN", "amount": NUMBER, "reply": "Great! Processing your application for ₹..." }
-
-            Output JSON Format: 
-            { 
-              "intent": "LOAN" | "CHAT", 
-              "amount": number (0 if chat), 
-              "reply": "string",
-              "suggestions": ["string", "string"] (Optional: Quick reply options for user)
-            }
+            1. If user says "Hi" or "Hello", suggest "Personal Loan".
+            2. If user asks "Student Loan", reply: "Student Loans info is coming soon. Can we try Personal Loan?"
+            3. If user selects a loan type, ASK FOR AMOUNT.
+            
+            Output JSON: { "intent": "CHAT", "reply": "string", "suggestions": ["string"] }
           `,
         },
         { role: "user", content: userText },
       ],
     });
-    return JSON.parse(completion.choices[0].message.content);
+
+    const aiData = JSON.parse(completion.choices[0].message.content);
+    aiData.source = "AI_AGENT";
+    return aiData;
   } catch (error) {
-    // Fallback Logic (Regex)
-    const amountMatch = userText.match(/(\d{4,})/);
-    if (amountMatch) {
-      return {
-        intent: "LOAN",
-        amount: parseInt(amountMatch[0]),
-        reply:
-          "AI is offline, but Rule Engine detected a loan request. Processing...",
-        source: "REGEX_FALLBACK",
-      };
-    }
     return {
       intent: "CHAT",
-      amount: 0,
-      reply: "System busy. Seedha amount bataiye (e.g. 50000).",
-      source: "NONE",
+      reply: "Please type the amount (e.g. 50k) to proceed.",
+      source: "FALLBACK_MODE",
     };
   }
 }
 
-// --- 🚀 MAIN ROUTE (The Agentic Workflow) ---
+// --- ROUTE ---
 app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
-
-  // STEP 1: AI Agent (Sales) extracts intent
   const aiResult = await analyzeLoanRequest(message);
 
-  // Handle Queries/Chat (Non-Loan)
-  if (aiResult.intent !== "LOAN" || aiResult.amount === 0) {
-    return res.json({ reply: aiResult.reply, action: null });
+  // SCENARIO 1: Show Plans (Consultation Phase)
+  // 🔥 FIX: Sending 'action' explicitly to trigger UI Animation
+  if (aiResult.intent === "SHOW_PLANS") {
+    return res.json({
+      reply: aiResult.reply,
+      action: "show_plans",
+      loanPlans: aiResult.loanPlans,
+      amount: aiResult.amount,
+      suggestions: aiResult.suggestions, // if any
+    });
   }
 
-  // STEP 2: Risk Agent (The Strict Cop) Logic
-  const riskDecision = riskAgent.evaluate(aiResult.amount);
+  // SCENARIO 2: User Confirmed Plan
+  if (aiResult.intent === "LOAN_CONFIRM") {
+    const riskDecision = riskAgent.evaluate(aiResult.amount);
+    const auditLog = complianceAgent.generateAuditLog(
+      riskDecision,
+      aiResult.amount
+    );
 
-  // STEP 3: Compliance Agent (The Lawyer) Audit
-  const auditLog = complianceAgent.generateAuditLog(
-    riskDecision,
-    aiResult.amount
-  );
+    const newApp = {
+      id: Date.now(),
+      amount: aiResult.amount,
+      tenure: aiResult.tenure,
+      status: riskDecision.status,
+      riskScore: riskDecision.score,
+      factors: riskDecision.factors,
+      auditData: auditLog,
+      // 🔥 SAVING DECISION SOURCE FOR ADMIN
+      decisionSource: aiResult.source,
+      date: new Date().toLocaleString(),
+    };
+    applications.push(newApp);
 
-  // STEP 4: Save Application with Explainability Data
-  const newApp = {
-    id: Date.now(),
-    amount: aiResult.amount,
-    status: riskDecision.status,
-    riskScore: riskDecision.score,
-    reason: riskDecision.reason,
+    let reply =
+      riskDecision.status === "APPROVED"
+        ? `Approved! Sanction Letter generated.`
+        : `Rejected. Reason: ${riskDecision.reason}`;
 
-    // 🔥 NEW: Storing "Glass Box" Data for Admin Panel
-    factors: riskDecision.factors,
-    auditData: auditLog,
+    let action =
+      riskDecision.status === "APPROVED" ? "download_sanction" : null;
 
-    date: new Date().toLocaleString(),
-    doc: riskDecision.status.includes("PENDING") ? "Pending" : "Not Required",
-  };
-
-  applications.push(newApp);
-
-  // STEP 5: Generate Response based on Agent Decisions
-  let clientAction = null;
-  let clientReply = aiResult.reply;
-
-  if (riskDecision.status === "APPROVED") {
-    clientAction = "download_sanction";
-    clientReply = `Badhai ho! Risk Agent ne approve kar diya hai (Score: ${riskDecision.score}). Sanction Letter ready hai.`;
-  } else if (riskDecision.status === "REJECTED") {
-    clientAction = null;
-    clientReply = `Sorry Bhai, Risk Agent ne decline kiya hai. Reason: ${riskDecision.reason}`;
-  } else {
-    clientAction = "upload_docs";
-    clientReply = `Score (${riskDecision.score}) theek hai, par amount bada hai. Salary Slip upload karni padegi.`;
+    return res.json({
+      reply,
+      action,
+      amount: aiResult.amount,
+      meta: { risk: riskDecision },
+    });
   }
 
-  // Send full debug info for you to see in console/network tab
-  res.json({
-    reply: clientReply,
-    action: clientAction,
-    amount: aiResult.amount,
-    meta: {
-      risk_factors: riskDecision.factors,
-      audit: auditLog,
-    },
-  });
+  // Normal Response
+  res.json(aiResult);
 });
 
-// --- ADMIN & UTILS ---
-
-// Admin Action Override
+// ... (Admin/Upload/PDF routes remain same as previous code) ...
 app.post("/api/admin/action", (req, res) => {
   const { id, action } = req.body;
   const appIndex = applications.findIndex((a) => a.id == id);
@@ -169,53 +207,33 @@ app.post("/api/admin/action", (req, res) => {
     applications[appIndex].status =
       action === "APPROVE" ? "APPROVED (Manual)" : "REJECTED (Manual)";
     applications[appIndex].reason = `Admin Override: ${action}`;
-    applications[
-      appIndex
-    ].auditData.complianceNote += ` [MANUAL OVERRIDE by Admin]`;
     res.json({ success: true, app: applications[appIndex] });
   } else {
     res.status(404).json({ success: false });
   }
 });
-
-// Upload Docs
+app.get("/api/admin/applications", (req, res) => res.json(applications));
 app.post("/api/upload", upload.single("file"), (req, res) => {
   const amount = req.body.amount || 0;
-  const appIndex = applications.findIndex((a) => a.amount == amount); // Simple matching logic
+  const appIndex = applications.findIndex((a) => a.amount == amount);
   if (appIndex > -1) {
     applications[appIndex].status = "APPROVED (Verified)";
     applications[appIndex].doc = req.file ? req.file.filename : "Uploaded";
-    applications[appIndex].auditData.complianceNote += " [Document Verified]";
   }
   res.json({
-    reply: "Docs Verified! Loan APPROVED.",
+    reply: "Docs Verified!",
     action: "download_sanction",
     amount: amount,
   });
 });
-
-// Get All Apps (Updated to send Audit Data)
-app.get("/api/admin/applications", (req, res) => res.json(applications));
-
-// Generate PDF
 app.get("/api/download-sanction", (req, res) => {
   const amount = req.query.amount || "Loan";
   const doc = new PDFDocument();
   res.setHeader("Content-Type", "application/pdf");
   doc.pipe(res);
-  doc.fontSize(25).text("INSTALOAN - Sanction Letter", { align: "center" });
-  doc.moveDown();
-  doc.fontSize(16).text(`Date: ${new Date().toLocaleDateString()}`);
-  doc.text(`Loan Amount: INR ${amount}`);
-  doc.text(`Status: APPROVED (AI Verified)`);
-  doc.moveDown();
-  doc
-    .fontSize(12)
-    .text(
-      "This is a computer generated document based on Risk Agent Analysis.",
-      { align: "center" }
-    );
+  doc.fontSize(25).text("INSTALOAN PRIME", { align: "center" });
+  doc.text(`Loan: ${amount} | APPROVED`, { align: "center" });
   doc.end();
 });
 
-app.listen(5000, () => console.log("🚀 Agentic Server running on Port 5000"));
+app.listen(5000, () => console.log("🚀 Server running on 5000"));
