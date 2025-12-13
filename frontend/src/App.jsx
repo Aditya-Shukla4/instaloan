@@ -11,7 +11,10 @@ import {
   FileText,
   AlertTriangle,
   Clock,
-  Mic, // 🎤 New Import
+  Mic,
+  TrendingUp,
+  ShieldAlert,
+  Zap,
 } from "lucide-react";
 
 function App() {
@@ -19,7 +22,8 @@ function App() {
   const [messages, setMessages] = useState([
     {
       sender: "bot",
-      text: "Namaste! InstaLoan mein swagat hai. Kitna loan chahiye?",
+      text: "Namaste! InstaLoan mein swagat hai. Are you looking for a Personal Loan or Student Loan?",
+      suggestions: ["Personal Loan", "Student Loan"], // Initial Suggestions
       timestamp: "Now",
     },
   ]);
@@ -29,15 +33,15 @@ function App() {
   const [adminData, setAdminData] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [expandedRow, setExpandedRow] = useState(null);
-  const [agentStatus, setAgentStatus] = useState(""); // UI State for Agents
+  const [agentStatus, setAgentStatus] = useState("");
 
-  // --- 🎙️ VOICE INPUT LOGIC (NEW) ---
+  // --- 🎙️ VOICE INPUT LOGIC ---
   const startListening = () => {
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      recognition.lang = "hi-IN"; // Hinglish Support
+      recognition.lang = "hi-IN";
       recognition.interimResults = false;
 
       setIsTyping(true);
@@ -62,15 +66,14 @@ function App() {
     }
   };
 
-  // --- 🤖 CHAT LOGIC WITH AGENT VISUALIZATION ---
+  // --- 🤖 CHAT LOGIC ---
   const processBotResponse = async (userInput) => {
     try {
-      // PHASE 1: Sales Agent (Intent)
+      // PHASE 1: Sales Agent
       setIsTyping(true);
       setAgentStatus("🕵️ Sales Agent: Understanding Intent...");
 
-      // Real API Call
-      // NOTE: Ensure URL matches your backend (localhost:5000 or Render)
+      // NOTE: Ensure URL matches your backend
       const response = await fetch("http://localhost:5000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -78,25 +81,26 @@ function App() {
       });
       const data = await response.json();
 
-      // PHASE 2: Risk Agent (Artificial Delay for "Theatre")
+      // PHASE 2: Risk Agent (Theatre) - Only if loan intent detected
       if (data.amount > 0) {
         setAgentStatus("👮 Risk Agent: Checking Credit Bureau & Fraud DB...");
-        await new Promise((r) => setTimeout(r, 1500)); // 1.5 sec delay
+        await new Promise((r) => setTimeout(r, 1200));
 
         // PHASE 3: Compliance Agent
         setAgentStatus("⚖️ Compliance Agent: Generating Audit Report...");
-        await new Promise((r) => setTimeout(r, 1200)); // 1.2 sec delay
+        await new Promise((r) => setTimeout(r, 1000));
       }
 
       // PHASE 4: Final Result
       setAgentStatus("✅ Finalizing Decision...");
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 500));
 
       let botMsg = {
         sender: "bot",
         text: data.reply,
         action: data.action,
         amount: data.amount,
+        suggestions: data.suggestions, // 🔥 Capture Suggestions from Backend
         timestamp: "Now",
       };
 
@@ -115,6 +119,14 @@ function App() {
       console.error("Error connecting to backend:", error);
       setIsTyping(false);
       setAgentStatus("");
+      // Fallback message if server is down
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          text: "⚠️ System Offline. Switching to Offline Mode (Regex)...",
+        },
+      ]);
     }
   };
 
@@ -165,7 +177,7 @@ function App() {
       });
       const data = await response.json();
 
-      await new Promise((r) => setTimeout(r, 1000)); // Fake verification delay
+      await new Promise((r) => setTimeout(r, 1000));
       setIsTyping(false);
       setAgentStatus("");
 
@@ -224,15 +236,26 @@ function App() {
             <div className="header-info">
               <h2>InstaLoan Prime</h2>
               <div className="verified-badge">
-                <ShieldCheck size={14} /> AI Agent System
+                <ShieldCheck size={14} /> AI Agent Active
               </div>
             </div>
           </div>
+
+          {/* 🔥 PRE-APPROVAL BANNER 🔥 */}
+          <div className="pre-approval-banner">
+            <span>
+              🎁 <b>Pre-Approved Offer:</b> You are eligible for up to ₹80,000
+              instantly!
+            </span>
+          </div>
+
           <div className="chat-window">
             {messages.map((msg, idx) => (
               <div key={idx} className={`message-wrapper ${msg.sender}`}>
                 <div className="bubble">
                   {msg.text}
+
+                  {/* Action Button (Download/Upload) */}
                   {msg.actionLabel && (
                     <button
                       className="action-btn"
@@ -246,11 +269,27 @@ function App() {
                       {msg.actionLabel}
                     </button>
                   )}
+
+                  {/* 🔥 NEW: SUGGESTION CHIPS (Guided Choice) 🔥 */}
+                  {msg.suggestions && msg.suggestions.length > 0 && (
+                    <div className="suggestion-container">
+                      {msg.suggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          className="chip-btn"
+                          onClick={() => {
+                            setInput(s);
+                            processBotResponse(s); // Auto-send when clicked
+                          }}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
-
-            {/* 🔥 AGENT VISUALIZATION UI 🔥 */}
             {isTyping && (
               <div className="agent-loader">
                 <div className="agent-spinner"></div>
@@ -260,7 +299,6 @@ function App() {
             <div ref={chatEndRef} />
           </div>
 
-          {/* 🎤 INPUT AREA WITH MIC 🎤 */}
           <div className="input-area">
             <button
               className="icon-btn mic-btn"
@@ -286,7 +324,7 @@ function App() {
           />
         </div>
       ) : (
-        // --- ADMIN PANEL (GLASS BOX) ---
+        // --- ADMIN PANEL ---
         <div className="admin-container">
           <div
             className="header"
@@ -305,6 +343,59 @@ function App() {
               Refresh ⟳
             </button>
           </div>
+
+          {/* 🔥 METRICS DASHBOARD 🔥 */}
+          <div className="metrics-dashboard">
+            <div className="metric-card">
+              <div
+                className="metric-icon"
+                style={{ background: "#dbeafe", color: "#1e40af" }}
+              >
+                <Zap size={18} />
+              </div>
+              <div>
+                <div className="metric-value">27s</div>
+                <div className="metric-title">Avg Approval</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div
+                className="metric-icon"
+                style={{ background: "#fee2e2", color: "#991b1b" }}
+              >
+                <ShieldAlert size={18} />
+              </div>
+              <div>
+                <div className="metric-value">14</div>
+                <div className="metric-title">Fraud Blocked</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div
+                className="metric-icon"
+                style={{ background: "#dcfce7", color: "#166534" }}
+              >
+                <TrendingUp size={18} />
+              </div>
+              <div>
+                <div className="metric-value">41%</div>
+                <div className="metric-title">Conversion</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div
+                className="metric-icon"
+                style={{ background: "#ffedd5", color: "#9a3412" }}
+              >
+                <Banknote size={18} />
+              </div>
+              <div>
+                <div className="metric-value">₹120</div>
+                <div className="metric-title">Cost Saved/App</div>
+              </div>
+            </div>
+          </div>
+
           <div className="table-wrapper">
             <table className="admin-table">
               <thead>
@@ -379,6 +470,7 @@ function App() {
                                 handleAdminAction(app.id, "APPROVE")
                               }
                               className="icon-btn approve"
+                              title="Force Approve"
                             >
                               <Check size={16} />
                             </button>
@@ -387,13 +479,14 @@ function App() {
                                 handleAdminAction(app.id, "REJECT")
                               }
                               className="icon-btn reject"
+                              title="Force Reject"
                             >
                               <X size={16} />
                             </button>
                           </div>
                         )}
                         {app.status.includes("Manual") && (
-                          <span style={{ fontSize: "10px" }}>
+                          <span style={{ fontSize: "10px", color: "#64748b" }}>
                             Admin Override
                           </span>
                         )}

@@ -29,7 +29,7 @@ const complianceAgent = new ComplianceAgent();
 // DATA STORE (In-Memory Database)
 let applications = [];
 
-// --- 🤖 AI SALES AGENT (Intent Extraction) ---
+
 async function analyzeLoanRequest(userText) {
   try {
     const completion = await groq.chat.completions.create({
@@ -39,22 +39,57 @@ async function analyzeLoanRequest(userText) {
         {
           role: "system",
           content: `
-                    Role: Loan Data Extractor.
-                    Task: Extract INTENT and AMOUNT. Do NOT make loan decisions.
-                    
-                    Output JSON: { 
-                        "intent": "LOAN" | "QUERY" | "CHAT", 
-                        "amount": number (0 if not found), 
-                        "confidence": number (0-1),
-                        "reply": "string (Polite Hinglish)" 
-                    }`,
+            Role: Proactive Senior Loan Officer for 'InstaLoan Prime'.
+            Goal: Guide the user to apply for a loan. Be helpful, short, and conversational (Hinglish allowed).
+            
+            Rules:
+            1. If user is VAGUE (e.g., "Hi", "Loan chahiye"):
+               - Do NOT assume amount.
+               - Proactively suggest: "Namaste! Are you looking for a Personal Loan or Student Loan?"
+               - Or suggest amounts: "Most users start with ₹50,000. Would that work?"
+               - Output: { "intent": "CHAT", "amount": 0, "reply": "...", "suggestions": ["₹50,000 Personal Loan", "₹2 Lakh Student Loan"] }
+
+            2. If user asks for INFO (e.g., "Interest kitna hai?", "EMI kya hogi?"):
+               - Provide estimates (NOT promises).
+               - "Typically 12-14% p.a. rehta hai depending on profile."
+               - "For ₹50k, approx EMI is ₹4,500/month."
+               - Output: { "intent": "CHAT", "amount": 0, "reply": "..." }
+
+            3. If user gives SPECIFIC intent (e.g., "50k chahiye", "I want 1 lakh"):
+               - Extract amount.
+               - Output: { "intent": "LOAN", "amount": NUMBER, "reply": "Great! Processing your application for ₹..." }
+
+            Output JSON Format: 
+            { 
+              "intent": "LOAN" | "CHAT", 
+              "amount": number (0 if chat), 
+              "reply": "string",
+              "suggestions": ["string", "string"] (Optional: Quick reply options for user)
+            }
+          `,
         },
         { role: "user", content: userText },
       ],
     });
     return JSON.parse(completion.choices[0].message.content);
   } catch (error) {
-    return { intent: "CHAT", amount: 0, reply: "System busy." };
+    // Fallback Logic (Regex)
+    const amountMatch = userText.match(/(\d{4,})/);
+    if (amountMatch) {
+      return {
+        intent: "LOAN",
+        amount: parseInt(amountMatch[0]),
+        reply:
+          "AI is offline, but Rule Engine detected a loan request. Processing...",
+        source: "REGEX_FALLBACK",
+      };
+    }
+    return {
+      intent: "CHAT",
+      amount: 0,
+      reply: "System busy. Seedha amount bataiye (e.g. 50000).",
+      source: "NONE",
+    };
   }
 }
 
