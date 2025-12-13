@@ -284,3 +284,72 @@ input:focus {
   background: #fef9c3;
   color: #854d0e;
 }
+
+.agent-loader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+  padding: 10px 15px;
+  border-radius: 12px;
+  margin: 10px 0;
+  font-size: 13px;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease-in;
+  width: fit-content;
+}
+
+.agent-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #0ea5e9;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mic-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  transition: all 0.2s;
+}
+
+.mic-btn:hover {
+  background-color: #f1f5f9;
+  color: #2563eb;
+  transform: scale(1.1);
+}
+
+.mic-btn:active {
+  background-color: #e2e8f0;
+  transform: scale(0.95);
+}

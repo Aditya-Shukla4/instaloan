@@ -2,14 +2,16 @@ import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
 import {
   Send,
-  Paperclip,
   ShieldCheck,
-  Download,
   Banknote,
   LayoutDashboard,
   MessageSquare,
   Check,
   X,
+  FileText,
+  AlertTriangle,
+  Clock,
+  Mic, // 🎤 New Import
 } from "lucide-react";
 
 function App() {
@@ -22,26 +24,73 @@ function App() {
     },
   ]);
   const [input, setInput] = useState("");
-  const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
   const [currentAmount, setCurrentAmount] = useState(null);
   const [adminData, setAdminData] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [agentStatus, setAgentStatus] = useState(""); // UI State for Agents
 
-  // --- CHAT LOGIC ---
+  // --- 🎙️ VOICE INPUT LOGIC (NEW) ---
+  const startListening = () => {
+    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = "hi-IN"; // Hinglish Support
+      recognition.interimResults = false;
+
+      setIsTyping(true);
+      setAgentStatus("🎙️ Listening to you...");
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+        setIsTyping(false);
+        setAgentStatus("");
+      };
+
+      recognition.onerror = () => {
+        setIsTyping(false);
+        setAgentStatus("");
+        alert("Mic access error. Check browser permissions.");
+      };
+
+      recognition.start();
+    } else {
+      alert("Browser does not support Voice API. Chrome use kar bhai.");
+    }
+  };
+
+  // --- 🤖 CHAT LOGIC WITH AGENT VISUALIZATION ---
   const processBotResponse = async (userInput) => {
     try {
+      // PHASE 1: Sales Agent (Intent)
       setIsTyping(true);
-      // UDPATE 1: Chat API URL updated
-      const response = await fetch(
-        "https://instaloan-ap7e.onrender.com/api/chat",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: userInput }),
-        }
-      );
+      setAgentStatus("🕵️ Sales Agent: Understanding Intent...");
+
+      // Real API Call
+      // NOTE: Ensure URL matches your backend (localhost:5000 or Render)
+      const response = await fetch("http://localhost:5000/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userInput }),
+      });
       const data = await response.json();
+
+      // PHASE 2: Risk Agent (Artificial Delay for "Theatre")
+      if (data.amount > 0) {
+        setAgentStatus("👮 Risk Agent: Checking Credit Bureau & Fraud DB...");
+        await new Promise((r) => setTimeout(r, 1500)); // 1.5 sec delay
+
+        // PHASE 3: Compliance Agent
+        setAgentStatus("⚖️ Compliance Agent: Generating Audit Report...");
+        await new Promise((r) => setTimeout(r, 1200)); // 1.2 sec delay
+      }
+
+      // PHASE 4: Final Result
+      setAgentStatus("✅ Finalizing Decision...");
+      await new Promise((r) => setTimeout(r, 600));
 
       let botMsg = {
         sender: "bot",
@@ -53,62 +102,104 @@ function App() {
 
       if (data.action === "download_sanction") {
         botMsg.actionLabel = "Download Sanction Letter";
-        // UPDATE 2: Download Link updated
-        botMsg.actionUrl = `https://instaloan-ap7e.onrender.com/api/download-sanction?amount=${data.amount}`;
+        botMsg.actionUrl = `http://localhost:5000/api/download-sanction?amount=${data.amount}`;
       } else if (data.action === "upload_docs") {
         botMsg.actionLabel = "Upload Salary Slip";
         setCurrentAmount(data.amount);
       }
 
       setIsTyping(false);
+      setAgentStatus("");
       setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
       console.error("Error connecting to backend:", error);
       setIsTyping(false);
+      setAgentStatus("");
     }
   };
 
   // --- ADMIN ACTIONS ---
   const handleAdminAction = async (id, action) => {
-    // UPDATE 3: Admin Action URL updated
-    await fetch("https://instaloan-ap7e.onrender.com/api/admin/action", {
+    await fetch("http://localhost:5000/api/admin/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, action }),
     });
-    fetchAdminData(); // Refresh table
+    fetchAdminData();
   };
 
   const fetchAdminData = async () => {
-    // UPDATE 4: Admin Fetch URL updated
-    const res = await fetch(
-      "https://instaloan-ap7e.onrender.com/api/admin/applications"
-    );
-    setAdminData(await res.json());
+    try {
+      const res = await fetch("http://localhost:5000/api/admin/applications");
+      const data = await res.json();
+      setAdminData(data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   useEffect(() => {
     if (view === "admin") fetchAdminData();
   }, [view]);
 
-  // Standard handlers...
+  // --- FILE UPLOAD ---
   const handleFileUpload = async (e) => {
-    /* Same as before */
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setMessages((prev) => [
+      ...prev,
+      { sender: "user", text: `📎 Uploaded: ${file.name}`, timestamp: "Now" },
+    ]);
+    setIsTyping(true);
+    setAgentStatus("📄 Document Agent: Verifying File...");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("amount", currentAmount || 0);
+
+    try {
+      const response = await fetch("http://localhost:5000/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+
+      await new Promise((r) => setTimeout(r, 1000)); // Fake verification delay
+      setIsTyping(false);
+      setAgentStatus("");
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          text: data.reply,
+          action: data.action,
+          actionLabel: "Download Sanction Letter",
+          actionUrl: `http://localhost:5000/api/download-sanction?amount=${data.amount}`,
+          timestamp: "Now",
+        },
+      ]);
+    } catch (error) {
+      setIsTyping(false);
+      setAgentStatus("");
+    }
   };
+
   const handleSend = () => {
-    /* Same as before */
     if (!input.trim()) return;
     setMessages((prev) => [
       ...prev,
       { sender: "user", text: input, timestamp: "Now" },
     ]);
+    const userInput = input;
     setInput("");
-    processBotResponse(input);
+    processBotResponse(userInput);
   };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, agentStatus]);
 
   return (
     <div className="main-wrapper">
@@ -126,7 +217,6 @@ function App() {
 
       {view === "chat" ? (
         <div className="chat-container">
-          {/* Same Chat UI as before */}
           <div className="header">
             <div className="logo-circle">
               <Banknote size={24} />
@@ -134,7 +224,7 @@ function App() {
             <div className="header-info">
               <h2>InstaLoan Prime</h2>
               <div className="verified-badge">
-                <ShieldCheck size={14} /> Verified Agent
+                <ShieldCheck size={14} /> AI Agent System
               </div>
             </div>
           </div>
@@ -159,19 +249,31 @@ function App() {
                 </div>
               </div>
             ))}
+
+            {/* 🔥 AGENT VISUALIZATION UI 🔥 */}
             {isTyping && (
-              <div className="bubble" style={{ fontStyle: "italic" }}>
-                Running Risk Analysis...
+              <div className="agent-loader">
+                <div className="agent-spinner"></div>
+                <span className="agent-text">{agentStatus}</span>
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
+
+          {/* 🎤 INPUT AREA WITH MIC 🎤 */}
           <div className="input-area">
+            <button
+              className="icon-btn mic-btn"
+              onClick={startListening}
+              title="Speak"
+            >
+              <Mic size={20} />
+            </button>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Type here..."
+              placeholder="Type or Speak..."
             />
             <button className="send-btn" onClick={handleSend}>
               <Send size={20} />
@@ -184,10 +286,24 @@ function App() {
           />
         </div>
       ) : (
-        // --- UPGRADED ADMIN UI ---
+        // --- ADMIN PANEL (GLASS BOX) ---
         <div className="admin-container">
-          <div className="header" style={{ background: "#1e293b" }}>
-            <h2>🏦 Risk & Loan Dashboard</h2>
+          <div
+            className="header"
+            style={{ background: "#0f172a", justifyContent: "space-between" }}
+          >
+            <h2>🏦 Agentic Lending OS</h2>
+            <button
+              onClick={fetchAdminData}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "white",
+                cursor: "pointer",
+              }}
+            >
+              Refresh ⟳
+            </button>
           </div>
           <div className="table-wrapper">
             <table className="admin-table">
@@ -195,68 +311,183 @@ function App() {
                 <tr>
                   <th>Amt</th>
                   <th>Risk Score</th>
-                  <th>System Decision</th>
-                  <th>Actions (Override)</th>
+                  <th>Status</th>
+                  <th>AI Analysis</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {adminData.map((app) => (
-                  <tr key={app.id}>
-                    <td>₹{app.amount}</td>
-                    <td>
-                      <span
-                        style={{
-                          color: app.riskScore < 650 ? "red" : "green",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {app.riskScore}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: "12px", fontWeight: "bold" }}>
-                        {app.status}
-                      </div>
-                      <div style={{ fontSize: "10px", color: "gray" }}>
-                        {app.reason}
-                      </div>
-                    </td>
-                    <td>
-                      {app.status.includes("PENDING") && (
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <button
-                            onClick={() => handleAdminAction(app.id, "APPROVE")}
-                            style={{
-                              background: "#dcfce7",
-                              color: "green",
-                              border: "none",
-                              padding: "5px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <Check size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleAdminAction(app.id, "REJECT")}
-                            style={{
-                              background: "#fee2e2",
-                              color: "red",
-                              border: "none",
-                              padding: "5px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      )}
-                      {app.status.includes("Manual") && (
-                        <span style={{ fontSize: "10px" }}>
-                          Admin Action Taken
+                  <React.Fragment key={app.id}>
+                    <tr
+                      style={{
+                        background:
+                          expandedRow === app.id ? "#f1f5f9" : "white",
+                      }}
+                    >
+                      <td>₹{app.amount}</td>
+                      <td>
+                        <span
+                          style={{
+                            color: app.riskScore < 650 ? "red" : "green",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {app.riskScore}
                         </span>
-                      )}
-                    </td>
-                  </tr>
+                      </td>
+                      <td>
+                        <div
+                          className={`status-badge ${
+                            app.status.includes("APPROVED")
+                              ? "success"
+                              : "pending"
+                          }`}
+                        >
+                          {app.status}
+                        </div>
+                      </td>
+                      <td>
+                        <button
+                          onClick={() =>
+                            setExpandedRow(
+                              expandedRow === app.id ? null : app.id
+                            )
+                          }
+                          style={{
+                            background: "#e0f2fe",
+                            color: "#0369a1",
+                            border: "none",
+                            padding: "6px 12px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
+                          <FileText size={14} /> View Logic
+                        </button>
+                      </td>
+                      <td>
+                        {app.status.includes("PENDING") && (
+                          <div style={{ display: "flex", gap: "10px" }}>
+                            <button
+                              onClick={() =>
+                                handleAdminAction(app.id, "APPROVE")
+                              }
+                              className="icon-btn approve"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleAdminAction(app.id, "REJECT")
+                              }
+                              className="icon-btn reject"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )}
+                        {app.status.includes("Manual") && (
+                          <span style={{ fontSize: "10px" }}>
+                            Admin Override
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                    {expandedRow === app.id && (
+                      <tr>
+                        <td colSpan="5" style={{ padding: "0" }}>
+                          <div
+                            style={{
+                              background: "#f8fafc",
+                              padding: "15px",
+                              borderBottom: "1px solid #e2e8f0",
+                            }}
+                          >
+                            <h4
+                              style={{
+                                margin: "0 0 10px 0",
+                                fontSize: "14px",
+                                color: "#475569",
+                              }}
+                            >
+                              🧠 Agent Logic Breakdown:
+                            </h4>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: "15px",
+                              }}
+                            >
+                              <div className="audit-card">
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    marginBottom: "5px",
+                                    color: "#b91c1c",
+                                    fontWeight: "bold",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  <AlertTriangle size={14} /> RISK FACTORS
+                                </div>
+                                <ul
+                                  style={{
+                                    margin: "0",
+                                    paddingLeft: "20px",
+                                    fontSize: "13px",
+                                    color: "#334155",
+                                  }}
+                                >
+                                  {app.factors && app.factors.length > 0 ? (
+                                    app.factors.map((f, i) => (
+                                      <li key={i}>{f}</li>
+                                    ))
+                                  ) : (
+                                    <li>No high-risk flags detected.</li>
+                                  )}
+                                </ul>
+                              </div>
+                              <div className="audit-card">
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    marginBottom: "5px",
+                                    color: "#15803d",
+                                    fontWeight: "bold",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  <Clock size={14} /> COMPLIANCE AUDIT
+                                </div>
+                                <p
+                                  style={{
+                                    margin: "0",
+                                    fontSize: "13px",
+                                    color: "#334155",
+                                  }}
+                                >
+                                  {app.auditData
+                                    ? app.auditData.complianceNote
+                                    : "Audit Pending..."}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
