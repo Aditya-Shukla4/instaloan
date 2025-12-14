@@ -1,499 +1,417 @@
-import React, { useState, useRef, useEffect } from "react";
-import "./App.css";
 import {
-  Send,
-  ShieldCheck,
-  Banknote,
-  LayoutDashboard,
-  MessageSquare,
-  Check,
-  X,
+  Bot,
+  User,
+  Upload,
   FileText,
-  AlertTriangle,
-  Clock,
-  Mic, // 🎤 New Import
+  ShieldAlert,
+  Loader2,
+  Menu,
+  Sun,
+  Plus,
+  Mic,
+  ArrowUp,
+  Sparkles,
+  Zap,
+  ChevronRight,
+  Moon,
+  PanelLeftClose,
 } from "lucide-react";
+import { Button } from "./components/ui/button";
+import { Card } from "./components/ui/card";
+import { cn } from "./lib/utils";
+
+// Import custom hooks & components
+import { useChatLogic } from "./hooks/useChatLogic";
+import { AppSidebar } from "./components/app-sidebar";
+import TypingText from "./components/TypingText";
+import { Textarea } from "./components/ui/textarea";
 
 function App() {
-  const [view, setView] = useState("chat");
-  const [messages, setMessages] = useState([
-    {
-      sender: "bot",
-      text: "Namaste! InstaLoan mein swagat hai. Kitna loan chahiye?",
-      timestamp: "Now",
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const chatEndRef = useRef(null);
-  const [currentAmount, setCurrentAmount] = useState(null);
-  const [adminData, setAdminData] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [agentStatus, setAgentStatus] = useState(""); // UI State for Agents
-
-  // --- 🎙️ VOICE INPUT LOGIC (NEW) ---
-  const startListening = () => {
-    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.lang = "hi-IN"; // Hinglish Support
-      recognition.interimResults = false;
-
-      setIsTyping(true);
-      setAgentStatus("🎙️ Listening to you...");
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInput(transcript);
-        setIsTyping(false);
-        setAgentStatus("");
-      };
-
-      recognition.onerror = () => {
-        setIsTyping(false);
-        setAgentStatus("");
-        alert("Mic access error. Check browser permissions.");
-      };
-
-      recognition.start();
-    } else {
-      alert("Browser does not support Voice API. Chrome use kar bhai.");
-    }
-  };
-
-  // --- 🤖 CHAT LOGIC WITH AGENT VISUALIZATION ---
-  const processBotResponse = async (userInput) => {
-    try {
-      // PHASE 1: Sales Agent (Intent)
-      setIsTyping(true);
-      setAgentStatus("🕵️ Sales Agent: Understanding Intent...");
-
-      // Real API Call
-      // NOTE: Ensure URL matches your backend (localhost:5000 or Render)
-      const response = await fetch("http://localhost:5000/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userInput }),
-      });
-      const data = await response.json();
-
-      // PHASE 2: Risk Agent (Artificial Delay for "Theatre")
-      if (data.amount > 0) {
-        setAgentStatus("👮 Risk Agent: Checking Credit Bureau & Fraud DB...");
-        await new Promise((r) => setTimeout(r, 1500)); // 1.5 sec delay
-
-        // PHASE 3: Compliance Agent
-        setAgentStatus("⚖️ Compliance Agent: Generating Audit Report...");
-        await new Promise((r) => setTimeout(r, 1200)); // 1.2 sec delay
-      }
-
-      // PHASE 4: Final Result
-      setAgentStatus("✅ Finalizing Decision...");
-      await new Promise((r) => setTimeout(r, 600));
-
-      let botMsg = {
-        sender: "bot",
-        text: data.reply,
-        action: data.action,
-        amount: data.amount,
-        timestamp: "Now",
-      };
-
-      if (data.action === "download_sanction") {
-        botMsg.actionLabel = "Download Sanction Letter";
-        botMsg.actionUrl = `http://localhost:5000/api/download-sanction?amount=${data.amount}`;
-      } else if (data.action === "upload_docs") {
-        botMsg.actionLabel = "Upload Salary Slip";
-        setCurrentAmount(data.amount);
-      }
-
-      setIsTyping(false);
-      setAgentStatus("");
-      setMessages((prev) => [...prev, botMsg]);
-    } catch (error) {
-      console.error("Error connecting to backend:", error);
-      setIsTyping(false);
-      setAgentStatus("");
-    }
-  };
-
-  // --- ADMIN ACTIONS ---
-  const handleAdminAction = async (id, action) => {
-    await fetch("http://localhost:5000/api/admin/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action }),
-    });
-    fetchAdminData();
-  };
-
-  const fetchAdminData = async () => {
-    try {
-      const res = await fetch("http://localhost:5000/api/admin/applications");
-      const data = await res.json();
-      setAdminData(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    if (view === "admin") fetchAdminData();
-  }, [view]);
-
-  // --- FILE UPLOAD ---
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setMessages((prev) => [
-      ...prev,
-      { sender: "user", text: `📎 Uploaded: ${file.name}`, timestamp: "Now" },
-    ]);
-    setIsTyping(true);
-    setAgentStatus("📄 Document Agent: Verifying File...");
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("amount", currentAmount || 0);
-
-    try {
-      const response = await fetch("http://localhost:5000/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await response.json();
-
-      await new Promise((r) => setTimeout(r, 1000)); // Fake verification delay
-      setIsTyping(false);
-      setAgentStatus("");
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "bot",
-          text: data.reply,
-          action: data.action,
-          actionLabel: "Download Sanction Letter",
-          actionUrl: `http://localhost:5000/api/download-sanction?amount=${data.amount}`,
-          timestamp: "Now",
-        },
-      ]);
-    } catch (error) {
-      setIsTyping(false);
-      setAgentStatus("");
-    }
-  };
-
-  const handleSend = () => {
-    if (!input.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { sender: "user", text: input, timestamp: "Now" },
-    ]);
-    const userInput = input;
-    setInput("");
-    processBotResponse(userInput);
-  };
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, agentStatus]);
+  const {
+    messages,
+    input,
+    setInput,
+    isLoading,
+    isDesktopSidebarOpen,
+    setIsDesktopSidebarOpen,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
+    hasInteracted,
+    isDarkMode,
+    toggleTheme,
+    scrollRef,
+    fileInputRef,
+    sendMessage,
+    handleFileUpload,
+    downloadSanction,
+  } = useChatLogic();
 
   return (
-    <div className="main-wrapper">
-      <button
-        className="toggle-view-btn"
-        onClick={() => setView(view === "chat" ? "admin" : "chat")}
-      >
-        {view === "chat" ? (
-          <LayoutDashboard size={20} />
-        ) : (
-          <MessageSquare size={20} />
+    <div className="flex h-screen bg-background text-foreground font-sans overflow-hidden">
+      {/* 1. DESKTOP SIDEBAR */}
+      <aside
+        className={cn(
+          "border-r border-sidebar-border hidden md:flex flex-col z-30 bg-sidebar transition-[width] duration-300 ease-in-out",
+          isDesktopSidebarOpen ? "w-64" : "w-0 overflow-hidden border-none"
         )}
-        {view === "chat" ? " Admin Dashboard" : " Live Chat"}
-      </button>
+      >
+        <AppSidebar
+          isMobile={false}
+          onCollapse={() => setIsDesktopSidebarOpen(false)}
+        />
+      </aside>
 
-      {view === "chat" ? (
-        <div className="chat-container">
-          <div className="header">
-            <div className="logo-circle">
-              <Banknote size={24} />
-            </div>
-            <div className="header-info">
-              <h2>InstaLoan Prime</h2>
-              <div className="verified-badge">
-                <ShieldCheck size={14} /> AI Agent System
-              </div>
-            </div>
-          </div>
-          <div className="chat-window">
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`message-wrapper ${msg.sender}`}>
-                <div className="bubble">
-                  {msg.text}
-                  {msg.actionLabel && (
-                    <button
-                      className="action-btn"
-                      onClick={() => {
-                        if (msg.actionLabel.includes("Download"))
-                          window.open(msg.actionUrl);
-                        else
-                          document.querySelector('input[type="file"]').click();
-                      }}
-                    >
-                      {msg.actionLabel}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* 🔥 AGENT VISUALIZATION UI 🔥 */}
-            {isTyping && (
-              <div className="agent-loader">
-                <div className="agent-spinner"></div>
-                <span className="agent-text">{agentStatus}</span>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* 🎤 INPUT AREA WITH MIC 🎤 */}
-          <div className="input-area">
-            <button
-              className="icon-btn mic-btn"
-              onClick={startListening}
-              title="Speak"
-            >
-              <Mic size={20} />
-            </button>
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Type or Speak..."
-            />
-            <button className="send-btn" onClick={handleSend}>
-              <Send size={20} />
-            </button>
-          </div>
-          <input
-            type="file"
-            style={{ display: "none" }}
-            onChange={handleFileUpload}
-          />
-        </div>
-      ) : (
-        // --- ADMIN PANEL (GLASS BOX) ---
-        <div className="admin-container">
-          <div
-            className="header"
-            style={{ background: "#0f172a", justifyContent: "space-between" }}
-          >
-            <h2>🏦 Agentic Lending OS</h2>
-            <button
-              onClick={fetchAdminData}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "white",
-                cursor: "pointer",
-              }}
-            >
-              Refresh ⟳
-            </button>
-          </div>
-          <div className="table-wrapper">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Amt</th>
-                  <th>Risk Score</th>
-                  <th>Status</th>
-                  <th>AI Analysis</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {adminData.map((app) => (
-                  <React.Fragment key={app.id}>
-                    <tr
-                      style={{
-                        background:
-                          expandedRow === app.id ? "#f1f5f9" : "white",
-                      }}
-                    >
-                      <td>₹{app.amount}</td>
-                      <td>
-                        <span
-                          style={{
-                            color: app.riskScore < 650 ? "red" : "green",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {app.riskScore}
-                        </span>
-                      </td>
-                      <td>
-                        <div
-                          className={`status-badge ${
-                            app.status.includes("APPROVED")
-                              ? "success"
-                              : "pending"
-                          }`}
-                        >
-                          {app.status}
-                        </div>
-                      </td>
-                      <td>
-                        <button
-                          onClick={() =>
-                            setExpandedRow(
-                              expandedRow === app.id ? null : app.id
-                            )
-                          }
-                          style={{
-                            background: "#e0f2fe",
-                            color: "#0369a1",
-                            border: "none",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "5px",
-                          }}
-                        >
-                          <FileText size={14} /> View Logic
-                        </button>
-                      </td>
-                      <td>
-                        {app.status.includes("PENDING") && (
-                          <div style={{ display: "flex", gap: "10px" }}>
-                            <button
-                              onClick={() =>
-                                handleAdminAction(app.id, "APPROVE")
-                              }
-                              className="icon-btn approve"
-                            >
-                              <Check size={16} />
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleAdminAction(app.id, "REJECT")
-                              }
-                              className="icon-btn reject"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        )}
-                        {app.status.includes("Manual") && (
-                          <span style={{ fontSize: "10px" }}>
-                            Admin Override
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                    {expandedRow === app.id && (
-                      <tr>
-                        <td colSpan="5" style={{ padding: "0" }}>
-                          <div
-                            style={{
-                              background: "#f8fafc",
-                              padding: "15px",
-                              borderBottom: "1px solid #e2e8f0",
-                            }}
-                          >
-                            <h4
-                              style={{
-                                margin: "0 0 10px 0",
-                                fontSize: "14px",
-                                color: "#475569",
-                              }}
-                            >
-                              🧠 Agent Logic Breakdown:
-                            </h4>
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr",
-                                gap: "15px",
-                              }}
-                            >
-                              <div className="audit-card">
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "5px",
-                                    marginBottom: "5px",
-                                    color: "#b91c1c",
-                                    fontWeight: "bold",
-                                    fontSize: "12px",
-                                  }}
-                                >
-                                  <AlertTriangle size={14} /> RISK FACTORS
-                                </div>
-                                <ul
-                                  style={{
-                                    margin: "0",
-                                    paddingLeft: "20px",
-                                    fontSize: "13px",
-                                    color: "#334155",
-                                  }}
-                                >
-                                  {app.factors && app.factors.length > 0 ? (
-                                    app.factors.map((f, i) => (
-                                      <li key={i}>{f}</li>
-                                    ))
-                                  ) : (
-                                    <li>No high-risk flags detected.</li>
-                                  )}
-                                </ul>
-                              </div>
-                              <div className="audit-card">
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "5px",
-                                    marginBottom: "5px",
-                                    color: "#15803d",
-                                    fontWeight: "bold",
-                                    fontSize: "12px",
-                                  }}
-                                >
-                                  <Clock size={14} /> COMPLIANCE AUDIT
-                                </div>
-                                <p
-                                  style={{
-                                    margin: "0",
-                                    fontSize: "13px",
-                                    color: "#334155",
-                                  }}
-                                >
-                                  {app.auditData
-                                    ? app.auditData.complianceNote
-                                    : "Audit Pending..."}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {/* 2. MOBILE SIDEBAR (Drawer) */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
       )}
+
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar border-r border-sidebar-border transform transition-transform duration-200 ease-in-out md:hidden shadow-2xl",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <AppSidebar
+          isMobile={true}
+          onClose={() => setIsMobileMenuOpen(false)}
+        />
+      </div>
+
+      {/* 3. MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col relative h-full w-full bg-background">
+        {/* Header */}
+        <header className="h-16 flex items-center justify-between px-4 lg:px-8 bg-transparent z-10 shrink-0">
+          <div className="flex items-center gap-3">
+            {!isDesktopSidebarOpen && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsDesktopSidebarOpen(true)}
+                className="hidden md:inline-flex text-muted-foreground hover:bg-secondary/50"
+              >
+                <PanelLeftClose className="w-5 h-5 rotate-180" />
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden text-muted-foreground hover:bg-secondary/50"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-accent/50 cursor-pointer text-muted-foreground hover:text-foreground">
+              <span className="font-medium text-sm">InstaLoan 7.0</span>
+              <ChevronRight className="w-3 h-3 opacity-50" />
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="text-muted-foreground hover:bg-secondary/50"
+          >
+            {isDarkMode ? (
+              <Sun className="w-5 h-5" />
+            ) : (
+              <Moon className="w-5 h-5" />
+            )}
+          </Button>
+        </header>
+
+        {/* Scrollable Chat Area */}
+        <div className="flex-1 overflow-y-auto px-4 scroll-smooth custom-scrollbar relative">
+          {/* HERO SECTION */}
+          {!hasInteracted && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+              <Card className="w-full max-w-xl bg-card border-border shadow-sm p-8 flex flex-col items-center text-center space-y-6">
+                <div className="p-4 bg-primary/10 rounded-full ring-1 ring-primary/20">
+                  <Bot className="w-12 h-12 text-primary" />
+                </div>
+
+                <div className="space-y-3">
+                  <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                    Namaste Grahak!
+                  </h1>
+                  <p className="text-muted-foreground text-base leading-relaxed max-w-md mx-auto">
+                    How can I assist with your finances today?
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mt-2">
+                  <Button
+                    variant="outline"
+                    className="h-auto py-3 px-4 justify-start gap-3 hover:bg-secondary border-dashed border-border transition-colors"
+                    onClick={() =>
+                      sendMessage("I need a personal loan of 50,000")
+                    }
+                  >
+                    <Zap className="w-4 h-4 text-yellow-500 shrink-0" />
+                    <span className="text-sm truncate font-normal">
+                      I need a loan of ₹50,000
+                    </span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-auto py-3 px-4 justify-start gap-3 hover:bg-secondary border-dashed border-border transition-colors"
+                    onClick={() => sendMessage("What are the interest rates?")}
+                  >
+                    <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
+                    <span className="text-sm truncate font-normal">
+                      Check Interest Rates
+                    </span>
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* CHAT THREAD */}
+          {hasInteracted && (
+            <div className="max-w-3xl mx-auto space-y-8 py-10">
+              {messages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={cn(
+                    "flex group",
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex gap-3 md:gap-6 max-w-[85%] md:max-w-full",
+                      msg.role === "user"
+                        ? "flex-row-reverse text-right"
+                        : "flex-row"
+                    )}
+                  >
+                    {/* Avatar */}
+                    <div className="shrink-0 flex flex-col items-center pt-1">
+                      {msg.role === "agent" ? (
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shadow-sm">
+                          <Bot className="w-5 h-5 text-primary" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shadow-sm">
+                          <User className="w-5 h-5 text-secondary-foreground" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Message block */}
+                    <div className="flex-1 space-y-2 overflow-hidden">
+                      <div
+                        className={cn(
+                          "flex items-baseline gap-2",
+                          msg.role === "user" && "justify-end"
+                        )}
+                      >
+                        <span className="font-semibold text-sm text-foreground">
+                          {msg.role === "agent" ? "InstaLoan AI" : "You"}
+                        </span>
+                        <span className="text-xs text-muted-foreground opacity-50 group-hover:opacity-100">
+                          {msg.timestamp}
+                        </span>
+                      </div>
+
+                      <div
+                        className={cn(
+                          "prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap px-4 py-2 rounded-2xl",
+                          msg.role === "user"
+                            ? "bg-secondary text-secondary-foreground ml-auto"
+                            : "bg-transparent text-foreground"
+                        )}
+                      >
+                        {msg.role === "agent" ? (
+                          <TypingText text={msg.content || ""} />
+                        ) : (
+                          msg.content || ""
+                        )}
+                      </div>
+
+                      {/* Glass Box Transparency Log */}
+                      {msg.meta &&
+                        (msg.meta.risk_factors?.length > 0 ||
+                          msg.meta.audit) && (
+                          <div className="mt-3 inline-block rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 w-full sm:w-auto min-w-72">
+                            <div className="flex items-center gap-2 text-orange-400 mb-2 font-medium text-xs uppercase tracking-wider">
+                              <ShieldAlert className="w-3.5 h-3.5" />
+                              <span>Risk Analysis</span>
+                            </div>
+
+                            {msg.meta.risk_factors?.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-3">
+                                {msg.meta.risk_factors.map((factor, i) => (
+                                  <span
+                                    key={i}
+                                    className="px-2 py-1 rounded-md bg-background border border-border text-xs text-muted-foreground shadow-sm"
+                                  >
+                                    {factor}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {msg.meta.audit && (
+                              <div className="text-xs font-mono text-muted-foreground flex flex-col gap-1 border-t border-border/50 pt-2">
+                                <span className="flex justify-between">
+                                  <span>ID:</span>
+                                  <span className="opacity-70 truncate max-w-36">
+                                    {msg.meta.audit.auditId}
+                                  </span>
+                                </span>
+                                <span className="flex justify-between">
+                                  <span>Decision:</span>
+                                  <span
+                                    className={
+                                      msg.meta.audit.decision === "APPROVED"
+                                        ? "text-green-500 font-bold"
+                                        : "text-red-400 font-bold"
+                                    }
+                                  >
+                                    {msg.meta.audit.decision}
+                                  </span>
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                      {/* Actions */}
+                      {msg.action === "upload_docs" && (
+                        <div className="pt-2">
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={handleFileUpload}
+                          />
+                          <Button
+                            onClick={() => fileInputRef.current.click()}
+                            disabled={isLoading}
+                            variant="secondary"
+                            className="gap-2 w-full sm:w-auto"
+                          >
+                            <Upload className="w-4 h-4" /> Upload Salary Slip
+                          </Button>
+                        </div>
+                      )}
+
+                      {msg.action === "download_sanction" && (
+                        <div className="pt-2">
+                          <Button
+                            onClick={downloadSanction}
+                            className="gap-2 bg-green-600 hover:bg-green-700 text-white border-none shadow-lg shadow-green-900/20 w-full sm:w-auto"
+                          >
+                            <FileText className="w-4 h-4" /> Download Sanction
+                            Letter
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex gap-3 md:gap-6 pl-1">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                  </div>
+                </div>
+              )}
+
+              <div ref={scrollRef} />
+            </div>
+          )}
+        </div>
+
+        {/* 3. INPUT AREA */}
+        <div className="p-4 pb-4 md:pb-6 z-20">
+          <div className="max-w-3xl mx-auto relative">
+            <div
+              className={cn(
+                "relative flex items-end gap-2 bg-secondary/40 border border-input rounded-3xl p-2 shadow-sm transition-colors focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-primary/50",
+                !hasInteracted && "shadow-md border-primary/20 bg-secondary/60"
+              )}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-full shrink-0 text-muted-foreground hover:bg-background hover:text-foreground"
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+
+              <Textarea
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = e.target.scrollHeight + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                rows={1}
+                placeholder="Ask about loans..."
+                className="
+    flex-1
+    resize-none
+    bg-transparent
+    border-none
+    shadow-none
+    focus-visible:ring-0
+    px-3
+    py-2
+    text-sm
+    leading-relaxed
+    max-h-40
+    custom-scrollbar
+  "
+              />
+
+              <div className="flex items-center gap-1 shrink-0 pb-1">
+                {!input.trim() && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden sm:flex h-8 w-8 rounded-full text-muted-foreground"
+                  >
+                    <Mic className="w-4 h-4" />
+                  </Button>
+                )}
+                <Button
+                  onClick={() => sendMessage()}
+                  disabled={!input.trim() || isLoading}
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 rounded-full transition-colors duration-200",
+                    input.trim()
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                  )}
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="text-xs text-center text-muted-foreground/60 mt-3 font-medium">
+              InstaLoan AI can make mistakes.
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
