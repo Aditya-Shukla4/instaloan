@@ -4,18 +4,7 @@ import { useState, useRef, useEffect } from "react";
 const API_URL = "http://localhost:5000/api";
 
 export function useChatLogic() {
-  const [messages, setMessages] = useState([
-    {
-      role: "agent",
-      content:
-        "Namaste! I am your AI Loan Assistant. How can I help you finance your goals today?",
-      meta: null,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

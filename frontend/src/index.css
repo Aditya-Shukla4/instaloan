@@ -1,3 +1,15 @@
+html {
+  background-color: #0a0a0a; /* dark bg */
+}
+
+html.dark{
+  background-color: #0a0a0a;
+}
+
+html:not(.dark) {
+  background-color: #ffffff;
+}
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -152,10 +164,4 @@
   transition: none !important;
 }
 
-html {
-  background-color: #0a0a0a; /* dark bg */
-}
 
-html:not(.dark) {
-  background-color: #ffffff;
-}
