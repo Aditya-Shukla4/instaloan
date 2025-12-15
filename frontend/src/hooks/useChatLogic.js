@@ -4,7 +4,14 @@ import { useState, useRef, useEffect } from "react";
 const API_URL = "http://localhost:5000/api";
 
 export function useChatLogic() {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => {
+  try {
+    const stored = sessionStorage.getItem("chat_messages");
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+});
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,6 +32,16 @@ export function useChatLogic() {
   const savedTheme = localStorage.getItem("theme");
   setIsDarkMode(savedTheme === "dark");
 }, []);
+
+useEffect(() => {
+  sessionStorage.setItem("chat_messages", JSON.stringify(messages));
+}, [messages]);
+
+useEffect(() => {
+  if (messages.length > 0) {
+    setHasInteracted(true);
+  }
+}, [messages]);
 
 
   const toggleTheme = () => {
@@ -55,81 +72,78 @@ export function useChatLogic() {
   // SEND MESSAGE
   // =======================
   const sendMessage = async (textOverride) => {
-    let textToSend = input;
+  // ⛔ BLOCK if bot is still replying
+  if (isLoading) return;
 
-    if (typeof textOverride === "string") {
-      textToSend = textOverride;
-    }
+  let textToSend = input;
 
-    if (!textToSend || !textToSend.trim()) return;
+  if (typeof textOverride === "string") {
+    textToSend = textOverride;
+  }
 
-    if (!hasInteracted) setHasInteracted(true);
+  if (!textToSend || !textToSend.trim()) return;
 
-    const userMsg = {
-      role: "user",
-      content: textToSend,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
+  if (!hasInteracted) setHasInteracted(true);
 
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: textToSend }),
-      });
-
-      // ❗ IMPORTANT: fetch does NOT throw on 4xx/5xx
-      if (!response.ok) {
-        throw new Error("Server unavailable");
-      }
-
-      const data = await response.json();
-
-      const safeReply =
-        typeof data?.reply === "string"
-          ? data.reply
-          : "System Error: Could not connect to the server.";
-
-      if (data?.amount) setCurrentAmount(data.amount);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "agent",
-          content: safeReply,
-          meta: data?.meta ?? null,
-          action: data?.action ?? null,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-      ]);
-    } catch (error) {
-      console.error("Chat error:", error);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "agent",
-          content: "System Error: Could not connect to the server.",
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
+  const userMsg = {
+    role: "user",
+    content: textToSend,
+    timestamp: new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
   };
+
+  setMessages((prev) => [...prev, userMsg]);
+  setInput("");
+  setIsLoading(true);
+
+  try {
+    const response = await fetch(`${API_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: textToSend }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Server unavailable");
+    }
+
+    const data = await response.json();
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "agent",
+        content:
+          typeof data?.reply === "string"
+            ? data.reply
+            : "System Error: Could not connect to the server.",
+        meta: data?.meta ?? null,
+        action: data?.action ?? null,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+    ]);
+  } catch (err) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "agent",
+        content: "System Error: Could not connect to the server.",
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+    ]);
+  } finally {
+    setIsLoading(false); // 🔓 unlock input ONLY here
+  }
+};
+
 
   // =======================
   // FILE UPLOAD

@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 //Importing Landing Page
 import Landing from "@/pages/Landing";
+import { color } from "framer-motion";
 
 function App() {
   const {
@@ -136,7 +137,7 @@ function App() {
         </header>
 
         {/* Scrollable Chat Area */}
-        <div className="flex-1 overflow-y-auto px-4 scroll-smooth custom-scrollbar relative">
+        <div className="flex-1 overflow-y-auto px-4 scroll-smooth app-scroll relative">
           {/* HERO SECTION */}
           {!hasInteracted && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
@@ -363,31 +364,46 @@ function App() {
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
+
+                  // auto-resize safely
                   e.target.style.height = "auto";
-                  e.target.style.height = e.target.scrollHeight + "px";
+                  e.target.style.height = `${Math.min(
+                    e.target.scrollHeight,
+                    160
+                  )}px`;
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
+
+                    // 🚫 block SEND while bot is replying
+                    if (isLoading) return;
+
                     sendMessage();
                   }
                 }}
                 rows={1}
-                placeholder="Ask about loans..."
-                className="
-    flex-1
-    resize-none
-    bg-transparent
-    border-none
-    shadow-none
-    focus-visible:ring-0
-    px-3
-    py-2
-    text-sm
-    leading-relaxed
-    max-h-40
-    custom-scrollbar
-  "
+                placeholder={
+                  isLoading
+                    ? "Type your next question… (AI is replying)"
+                    : "Ask about loans..."
+                }
+                className={cn(
+                  `
+      flex-1
+      resize-none
+      bg-transparent
+      border-none
+      shadow-none
+      focus-visible:ring-0
+      px-3
+      py-2
+      text-sm
+      leading-relaxed
+      max-h-40
+      overflow-y-auto
+    `
+                )}
               />
 
               <div className="flex items-center gap-1 shrink-0 pb-1">
@@ -402,16 +418,22 @@ function App() {
                 )}
                 <Button
                   onClick={() => sendMessage()}
-                  disabled={!input.trim() || isLoading}
+                  disabled={isLoading || !input.trim()}
                   size="icon"
                   className={cn(
-                    "h-8 w-8 rounded-full transition-colors duration-200",
-                    input.trim()
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                    "h-8 w-8 rounded-full transition-all",
+                    isLoading
+                      ? "bg-muted text-muted-foreground cursor-not-allowed"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90"
                   )}
                 >
-                  <ArrowUp className="w-4 h-4" />
+                  {isLoading ? (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                    />
+                  ) : (
+                    <ArrowUp className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             </div>

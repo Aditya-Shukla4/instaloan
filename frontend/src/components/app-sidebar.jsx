@@ -18,7 +18,7 @@ export function AppSidebar({
       {/* 1. Header */}
       <div className="p-4 flex items-center justify-between border-b border-sidebar-border/50 h-16">
         <div className="flex items-center gap-2 font-semibold">
-           <div className="bg-sidebar-primary text-sidebar-primary-foreground p-1.5 rounded-lg">
+           <div className="bg-transparent text-sidebar-primary-foreground p-1.5 rounded-lg">
               <Bot className="w-5 h-5" />
            </div>
            <span>InstaLoan</span>
