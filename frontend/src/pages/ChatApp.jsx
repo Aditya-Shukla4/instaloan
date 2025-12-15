@@ -54,8 +54,9 @@ function App() {
       {/* 1. DESKTOP SIDEBAR */}
       <aside
         className={cn(
-          "border-r border-sidebar-border hidden md:flex flex-col z-30 bg-sidebar transition-[width] duration-300 ease-in-out",
-          isDesktopSidebarOpen ? "w-64" : "w-0 overflow-hidden border-none"
+          "fixed inset-y-0 left-0 z-30 hidden md:flex w-64 flex-col bg-sidebar border-r border-sidebar-border",
+          "transform transition-transform duration-300 ease-in-out",
+          isDesktopSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <AppSidebar
@@ -85,7 +86,12 @@ function App() {
       </div>
 
       {/* 3. MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col relative h-full w-full bg-background">
+      <main
+        className={cn(
+          "flex-1 flex flex-col relative h-full w-full bg-background transition-[padding] duration-300",
+          isDesktopSidebarOpen && "md:pl-64"
+        )}
+      >
         {/* Header */}
         <header className="h-16 flex items-center justify-between px-4 lg:px-8 bg-transparent z-10 shrink-0">
           <div className="flex items-center gap-3">

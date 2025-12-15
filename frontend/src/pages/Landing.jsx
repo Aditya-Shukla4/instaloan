@@ -10,8 +10,8 @@ export default function Landing() {
     <div className="relative min-h-screen bg-background text-foreground overflow-hidden">
       {/* Background glow */}
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-40 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-primary/20 blur-[140px]" />
-        <div className="absolute bottom-[-120px] right-[-80px] h-[360px] w-[360px] rounded-full bg-purple-500/20 blur-[160px]" />
+        <div className="absolute -top-40 left-1/2 h-[105] w-[105] -translate-x-1/2 rounded-full bg-primary/20 blur-[140px]" />
+        <div className="absolute bottom-[-30] right-[-20] h-[90] w-[90] rounded-full bg-purple-500/20 blur-[160px]" />
       </div>
 
       {/* HERO */}
