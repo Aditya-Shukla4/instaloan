@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export default function TypingText({ text, speed = 60 }) {
+export default function TypingText({ text, speed = 40 }) {
   const safeText = typeof text === "string" ? text : "";
   const words = safeText.split(" ");
 
