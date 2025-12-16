@@ -1,6 +1,11 @@
 import { Router } from "express";
-import { signup, login,refresh,logout } from "../controllers/auth.controller.js";
-import { requireAuth } from "../middlewares/auth.middleware.js";
+import {
+  signup,
+  login,
+  refresh,
+  logout,
+  verifyEmail,
+} from "../controllers/auth.controller.js";
 
 const router = Router();
 
@@ -16,7 +21,22 @@ router.post("/signup", signup);
  */
 router.post("/login", login);
 
-router.post("/refresh",refresh);
-router.post("/logout",logout);
+/**
+ * POST /auth/refresh
+ * Uses HttpOnly refreshToken cookie
+ */
+router.post("/refresh", refresh);
+
+/**
+ * POST /auth/logout
+ * Logs out current device
+ */
+router.post("/logout", logout);
+
+/**
+ * GET /auth/verify-email?token=...
+ * Email verification link
+ */
+router.get("/verify-email", verifyEmail);
 
 export default router;

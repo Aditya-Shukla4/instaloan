@@ -1,13 +1,21 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+const isProd = process.env.NODE_ENV === "production";
+
+
 import {
   generateAccessToken,
   generateRefreshToken,
   hashToken,
 } from "../utils/tokens.js";
 
+import {
+  generateEmailVerificationToken,
+  hashEmailToken,
+} from "../utils/emailVerification.js";
+
+import { sendVerificationEmail } from "../utils/sendEmail.js";
 
 /**
  * POST /auth/signup
@@ -38,9 +46,23 @@ export const signup = async (req: Request, res: Response) => {
       },
     });
 
+    // 🔐 Email verification token
+    const verificationToken = generateEmailVerificationToken();
+    const tokenHash = hashEmailToken(verificationToken);
+
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
+      },
+    });
+
+    // 📧 Send real verification email
+    await sendVerificationEmail(user.email, verificationToken);
+
     return res.status(201).json({
-      id: user.id,
-      email: user.email,
+      message: "Signup successful. Please verify your email.",
     });
   } catch (err) {
     console.error("Signup error:", err);
@@ -68,44 +90,48 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        message: "Please verify your email before logging in",
+      });
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // 1️⃣ Generate tokens
+    // 🔑 Tokens
     const accessToken = generateAccessToken(user.id);
     const refreshToken = generateRefreshToken();
 
-    // 2️⃣ Store hashed refresh token in DB
     await prisma.session.create({
       data: {
         userId: user.id,
         refreshTokenHash: hashToken(refreshToken),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
 
-    // 3️⃣ Set HttpOnly cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      sameSite: "strict",
-      secure: false, // true in production (HTTPS)
+      sameSite: isProd?"none":"strict",
+      secure: false, // true in prod
       path: "/auth",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // 4️⃣ Send access token only
     return res.json({ accessToken });
-
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
-
+/**
+ * POST /auth/refresh
+ */
 export const refresh = async (req: Request, res: Response) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
@@ -118,7 +144,6 @@ export const refresh = async (req: Request, res: Response) => {
 
     const session = await prisma.session.findUnique({
       where: { refreshTokenHash: tokenHash },
-      include: { user: true },
     });
 
     if (!session) {
@@ -126,14 +151,11 @@ export const refresh = async (req: Request, res: Response) => {
     }
 
     if (session.expiresAt < new Date()) {
-      // cleanup
-      await prisma.session.delete({
-        where: { id: session.id },
-      });
+      await prisma.session.delete({ where: { id: session.id } });
       return res.status(401).json({ message: "Refresh token expired" });
     }
 
-    // 🔄 ROTATE refresh token (best practice)
+    // 🔄 Rotate refresh token
     const newRefreshToken = generateRefreshToken();
 
     await prisma.session.update({
@@ -146,8 +168,8 @@ export const refresh = async (req: Request, res: Response) => {
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
-      sameSite: "strict",
-      secure: false, // true in prod
+      sameSite: isProd ? "none":"strict",
+      secure: isProd,
       path: "/auth",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -161,7 +183,9 @@ export const refresh = async (req: Request, res: Response) => {
   }
 };
 
-//LOGIC FOR LOG OUT
+/**
+ * POST /auth/logout
+ */
 export const logout = async (req: Request, res: Response) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
@@ -178,14 +202,51 @@ export const logout = async (req: Request, res: Response) => {
 
     res.clearCookie("refreshToken", {
       path: "/auth",
-      httpOnly:true,
-      sameSite:"strict",
-      secure:false,
+      httpOnly: true,
+      sameSite: isProd?"none":"strict",
+      secure: isProd,
     });
 
     return res.json({ message: "Logged out successfully" });
   } catch (err) {
     console.error("Logout error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * GET /auth/verify-email?token=...
+ */
+export const verifyEmail = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.query;
+
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ message: "Invalid token" });
+    }
+
+    const tokenHash = hashEmailToken(token);
+
+    const record = await prisma.emailVerificationToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (!record || record.expiresAt < new Date()) {
+      return res.status(400).json({ message: "Token expired or invalid" });
+    }
+
+    await prisma.user.update({
+      where: { id: record.userId },
+      data: { emailVerified: true },
+    });
+
+    await prisma.emailVerificationToken.delete({
+      where: { id: record.id },
+    });
+
+    return res.json({ message: "Email verified successfully" });
+  } catch (err) {
+    console.error("Verify email error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
