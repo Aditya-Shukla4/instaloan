@@ -24,9 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-// Import custom hooks & components
 import { useChatLogic } from "@/hooks/useChatLogic";
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppSidebar } from "@/components/app-sidebar"; // Ensure this path is correct
 import TypingText from "@/components/TypingText";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -51,6 +50,12 @@ function App() {
     handleFileUpload,
     handleDrop,
     downloadSanction,
+    handlePlanClick,
+    resetChat,
+    startNewChat,
+    chatHistory,
+    loadChatFromHistory,
+    clearHistory,
   } = useChatLogic();
 
   return (
@@ -58,18 +63,21 @@ function App() {
       {/* 1. DESKTOP SIDEBAR */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden md:flex w-64 flex-col bg-sidebar border-r border-sidebar-border",
-          "transform transition-transform duration-300 ease-in-out",
+          "fixed inset-y-0 left-0 z-30 hidden md:flex w-64 flex-col bg-sidebar border-r border-sidebar-border transform transition-transform duration-300 ease-in-out",
           isDesktopSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <AppSidebar
           isMobile={false}
           onCollapse={() => setIsDesktopSidebarOpen(false)}
+          onNewChat={startNewChat}
+          chatHistory={chatHistory} // 🔥 PASS DATA
+          onLoadChat={loadChatFromHistory} // 🔥 PASS FUNCTION
+          onClearHistory={clearHistory}
         />
       </aside>
 
-      {/* 2. MOBILE SIDEBAR (Drawer) */}
+      {/* 2. MOBILE SIDEBAR */}
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden"
@@ -86,6 +94,10 @@ function App() {
         <AppSidebar
           isMobile={true}
           onClose={() => setIsMobileMenuOpen(false)}
+          onNewChat={startNewChat}
+          chatHistory={chatHistory}
+          onLoadChat={loadChatFromHistory}
+          onClearHistory={clearHistory}
         />
       </div>
 
@@ -122,28 +134,27 @@ function App() {
             </Button>
 
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-accent/50 cursor-pointer text-muted-foreground hover:text-foreground">
-              <span className="font-medium text-sm">InstaLoan 7.0</span>
+              <span className="font-medium text-sm">InstaLoan</span>
               <ChevronRight className="w-3 h-3 opacity-50" />
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            className="text-muted-foreground hover:bg-secondary/50"
-          >
-            {isDarkMode ? (
-              <Sun className="w-5 h-5" />
-            ) : (
-              <Moon className="w-5 h-5" />
-            )}
-          </Button>
+          <div className="flex items-center gap-1">
+            {/* Header se button hata diya kyunki ab Sidebar me hai */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={startNewChat}
+              title="New Chat"
+              className="text-muted-foreground hover:bg-secondary/50 hover:text-primary transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+            </Button>
+          </div>
         </header>
 
         {/* Scrollable Chat Area */}
-        <div className="flex-1 overflow-y-auto px-4 scroll-smooth app-scroll relative">
-          {/* HERO SECTION */}
+        <div className="flex-1 overflow-y-auto px-4 scroll-smooth relative">
           {!hasInteracted && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
               <Card className="w-full max-w-xl bg-card border-border shadow-sm p-8 flex flex-col items-center text-center space-y-6">
@@ -188,7 +199,6 @@ function App() {
             </div>
           )}
 
-          {/* CHAT THREAD */}
           {hasInteracted && (
             <div className="max-w-3xl mx-auto space-y-8 py-10">
               {messages.map((msg, idx) => (
@@ -207,7 +217,6 @@ function App() {
                         : "flex-row"
                     )}
                   >
-                    {/* Avatar */}
                     <div className="shrink-0 flex flex-col items-center pt-1">
                       {msg.role === "agent" ? (
                         <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shadow-sm">
@@ -220,7 +229,6 @@ function App() {
                       )}
                     </div>
 
-                    {/* Message block */}
                     <div className="flex-1 space-y-2 overflow-hidden">
                       <div
                         className={cn(
@@ -244,7 +252,6 @@ function App() {
                             : "bg-transparent text-foreground"
                         )}
                       >
-                        {/* RENDER FILES IF USER SENT THEM */}
                         {msg.role === "user" && msg.attachments && (
                           <div className="flex flex-wrap justify-end gap-2 mb-3">
                             {groupAttachments(msg.attachments).map(
@@ -269,9 +276,82 @@ function App() {
                         ) : (
                           msg.content || ""
                         )}
+
+                        {msg.loanPlans && (
+                          <div className="flex gap-3 mt-4 overflow-x-auto pb-2 w-full no-scrollbar">
+                            {msg.loanPlans.map((plan, i) => (
+                              <div
+                                key={i}
+                                className="bg-card border border-border rounded-xl p-3 min-w-[130px] cursor-pointer transition-all duration-200 shadow-sm text-center hover:border-primary hover:bg-secondary/50 hover:-translate-y-0.5 flex-shrink-0"
+                                onClick={() =>
+                                  handlePlanClick(msg.amount, plan.months)
+                                }
+                              >
+                                <div className="text-[11px] font-semibold text-muted-foreground uppercase mb-1">
+                                  {plan.months} Months
+                                </div>
+                                <div className="text-lg font-bold text-primary mb-1">
+                                  ₹{plan.emi.toLocaleString()}
+                                  <span className="text-[10px] font-normal text-muted-foreground ml-1">
+                                    /mo
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  Total: ₹{(plan.total / 1000).toFixed(1)}k
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {msg.emiData && (
+                          <div className="bg-card border border-border rounded-xl mt-4 overflow-hidden shadow-sm w-full max-w-xs">
+                            <div className="bg-secondary/50 px-4 py-3 border-b border-border flex justify-between items-center">
+                              <span className="text-xs font-semibold text-muted-foreground">
+                                💰 EMI Breakdown
+                              </span>
+                              <span className="text-base font-bold text-foreground">
+                                ₹{msg.emiData.emi.toLocaleString()}/mo
+                              </span>
+                            </div>
+                            <div className="p-4 space-y-2">
+                              <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>Principal</span>
+                                <span>
+                                  ₹{msg.emiData.principal.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm text-muted-foreground">
+                                <span>Interest (14%)</span>
+                                <span className="text-destructive font-medium">
+                                  + ₹{msg.emiData.interest.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="h-px bg-border my-2"></div>
+                              <div className="flex justify-between text-sm font-bold text-foreground">
+                                <span>Total Payable</span>
+                                <span>
+                                  ₹{msg.emiData.total.toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="p-3 bg-secondary/20 border-t border-border">
+                              <Button
+                                className="w-full bg-chart-4 hover:bg-chart-4/90 text-white"
+                                onClick={() =>
+                                  handlePlanClick(
+                                    msg.emiData.principal,
+                                    msg.emiData.tenure
+                                  )
+                                }
+                              >
+                                Apply Now
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Glass Box Transparency Log (Meta & Audit) */}
                       {msg.meta &&
                         (msg.meta.risk_factors?.length > 0 ||
                           msg.meta.audit) && (
@@ -307,8 +387,8 @@ function App() {
                                   <span
                                     className={
                                       msg.meta.audit.decision === "APPROVED"
-                                        ? "text-chart-4 font-bold" // Success (Greenish)
-                                        : "text-destructive font-bold" // Error (Red)
+                                        ? "text-chart-4 font-bold"
+                                        : "text-destructive font-bold"
                                     }
                                   >
                                     {msg.meta.audit.decision}
@@ -319,7 +399,6 @@ function App() {
                           </div>
                         )}
 
-                      {/* Actions */}
                       {msg.action === "upload_docs" && msg.role === "agent" && (
                         <div className="pt-2">
                           <Button
@@ -337,8 +416,7 @@ function App() {
                         <div className="pt-2">
                           <Button
                             onClick={downloadSanction}
-                            // Using chart-4 (Greenish) for success action to stay within variables
-                            className="gap-2 bg-chart-4 hover:bg-chart-4/90 text-primary-foreground border-none shadow-lg shadow-chart-4/20 w-full sm:w-auto"
+                            className="gap-2 bg-chart-4 hover:bg-chart-4/90 text-white border-none shadow-lg shadow-chart-4/20 w-full sm:w-auto"
                           >
                             <FileText className="w-4 h-4" /> Download Sanction
                             Letter
@@ -355,6 +433,9 @@ function App() {
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <Loader2 className="w-4 h-4 text-primary animate-spin" />
                   </div>
+                  <span className="text-sm text-muted-foreground animate-pulse mt-1">
+                    Analyzing Request...
+                  </span>
                 </div>
               )}
 
@@ -363,11 +444,9 @@ function App() {
           )}
         </div>
 
-        {/* 3. INPUT AREA */}
-        {/* ================= INPUT AREA ================= */}
+        {/* INPUT AREA */}
         <div className="p-4 pb-4 md:pb-6 z-20">
           <div className="max-w-3xl mx-auto relative">
-            {/* STAGING QUEUE AREA */}
             {fileQueue.length > 0 && (
               <div className="flex gap-2 mb-3 overflow-x-auto pb-2 pt-2 pr-2 scrollbar-hide">
                 {fileQueue.map((file) => (
@@ -375,15 +454,13 @@ function App() {
                     key={file.id}
                     className={cn(
                       "relative group flex flex-col items-center justify-center w-16 h-16 shrink-0 rounded-lg border transition-all",
-                      // STYLING FOR STATUSES (Using Vars):
                       file.status === "uploading" &&
                         "border-primary/30 bg-primary/5",
                       file.status === "error" &&
-                        "border-destructive bg-destructive/10", // ERROR VAR
+                        "border-destructive bg-destructive/10",
                       file.status === "done" && "border-border bg-secondary/50"
                     )}
                   >
-                    {/* Icon */}
                     <div
                       className={cn(
                         "mb-1 transition-opacity",
@@ -393,8 +470,6 @@ function App() {
                     >
                       {getFileIcon(file.type)}
                     </div>
-
-                    {/* Name */}
                     <span
                       className={cn(
                         "text-[9px] w-full px-1 text-center truncate",
@@ -405,50 +480,20 @@ function App() {
                     >
                       {file.name}
                     </span>
-
-                    {/* Circular Progress */}
                     {file.status === "uploading" && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
-                          <circle
-                            cx="16"
-                            cy="16"
-                            r="12"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            fill="transparent"
-                            className="text-muted-foreground/20"
-                          />
-                          <circle
-                            cx="16"
-                            cy="16"
-                            r="12"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            fill="transparent"
-                            className="text-primary transition-all duration-200 ease-linear"
-                            strokeDasharray="75.4"
-                            strokeDashoffset={
-                              75.4 - (75.4 * file.progress) / 100
-                            }
-                          />
-                        </svg>
+                        <Loader2 className="w-6 h-6 text-primary animate-spin" />
                       </div>
                     )}
-
-                    {/* ERROR OVERLAY */}
                     {file.status === "error" && (
                       <div className="absolute inset-0 flex items-center justify-center bg-background/40 backdrop-blur-[1px] rounded-lg">
                         <AlertCircle className="w-6 h-6 text-destructive drop-shadow-sm" />
                       </div>
                     )}
-
-                    {/* Remove Button (Position Fixed to Top Right) */}
                     {(file.status === "done" || file.status === "error") && (
                       <button
                         onClick={() => removeFileFromQueue(file.id)}
                         className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm scale-75 hover:scale-100 z-10"
-                        title="Remove file"
                       >
                         <X className="w-2.5 h-2.5" />
                       </button>
@@ -480,7 +525,6 @@ function App() {
                 className="h-10 w-10 rounded-full shrink-0 text-muted-foreground hover:bg-background hover:text-foreground"
               >
                 <Plus className="w-5 h-5" />
-                <span className="sr-only">Upload files</span>
               </Button>
 
               <Textarea
@@ -554,16 +598,11 @@ function App() {
   );
 }
 
-/* ============ HELPER FUNCTIONS ============ */
-
 function getFileIcon(mimeType) {
-  // Use Chart-2 (Teal/Blue) for Images
   if (mimeType?.includes("image"))
     return <ImageIcon className="w-4 h-4 text-chart-2" />;
-  // Use Destructive (Red) for PDFs
   if (mimeType?.includes("pdf"))
     return <FileText className="w-6 h-6 text-destructive" />;
-  // Use Muted Foreground (Gray) for others
   return <File className="w-8 h-8 text-muted-foreground" />;
 }
 
@@ -582,11 +621,9 @@ function groupAttachments(attachments) {
     let key = "other";
     if (file.type.includes("image")) key = "image";
     else if (file.type.includes("pdf")) key = "pdf";
-
     if (!groups[key]) groups[key] = 0;
     groups[key]++;
   });
-
   return Object.keys(groups).map((key) => ({
     type: key,
     count: groups[key],

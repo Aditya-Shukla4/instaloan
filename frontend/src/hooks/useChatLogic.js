@@ -3,60 +3,82 @@ import { useState, useRef, useEffect, useCallback } from "react";
 // Backend URL
 const API_URL = "http://localhost:5000/api";
 
-// File constraints
-const MAX_TOTAL_SIZE_MB = 30;
-const MAX_TOTAL_SIZE_BYTES = MAX_TOTAL_SIZE_MB * 1024 * 1024;
-
 export function useChatLogic() {
-  /* =======================
-     CHAT STATE
-  ======================= */
-  const [messages, setMessages] = useState(() => {
+  // --- 💾 1. CHAT HISTORY STATE (Long Term - LocalStorage) ---
+  const [chatHistory, setChatHistory] = useState(() => {
     try {
-      const stored = sessionStorage.getItem("chat_messages");
-      return stored ? JSON.parse(stored) : [];
+      const saved = localStorage.getItem("instaloan_history");
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
 
+  // --- 💬 2. CURRENT CHAT STATE (Short Term - SessionStorage) ---
+  // 🔥 FIX: Initial State ab SessionStorage se uthayega
+  const [messages, setMessages] = useState(() => {
+    try {
+      const savedSession = sessionStorage.getItem("current_chat_session");
+      return savedSession
+        ? JSON.parse(savedSession)
+        : [
+            {
+              role: "agent",
+              content:
+                "Namaste! InstaLoan mein swagat hai. How can I help you today?",
+              suggestions: ["Personal Loan", "Student Loan (Info)"],
+              timestamp: "Now",
+            },
+          ];
+    } catch {
+      return [
+        {
+          role: "agent",
+          content:
+            "Namaste! InstaLoan mein swagat hai. How can I help you today?",
+          suggestions: ["Personal Loan", "Student Loan (Info)"],
+          timestamp: "Now",
+        },
+      ];
+    }
+  });
+
+  // Standard States
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [agentStatus, setAgentStatus] = useState("");
   const [currentAmount, setCurrentAmount] = useState(0);
-
-  /* =======================
-     FILE QUEUE STATE
-  ======================= */
-  // Structure: { id, file, name, size, type, progress, status, serverData }
   const [fileQueue, setFileQueue] = useState([]);
-
-  /* =======================
-     SIDEBAR / UI STATE
-  ======================= */
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [hasInteracted, setHasInteracted] = useState(false);
 
-  /* =======================
-     THEME STATE
-  ======================= */
+  // Interaction check based on messages length
+  const [hasInteracted, setHasInteracted] = useState(messages.length > 1);
+
   const [isDarkMode, setIsDarkMode] = useState(true);
+
+  const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // --- 🔄 SYNC HISTORY TO LOCALSTORAGE ---
+  useEffect(() => {
+    localStorage.setItem("instaloan_history", JSON.stringify(chatHistory));
+  }, [chatHistory]);
+
+  // --- 🔥 FIX: SYNC CURRENT CHAT TO SESSION STORAGE ---
+  useEffect(() => {
+    sessionStorage.setItem("current_chat_session", JSON.stringify(messages));
+    if (messages.length > 1) setHasInteracted(true);
+  }, [messages]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
     setIsDarkMode(savedTheme === "dark");
   }, []);
 
-  /* =======================
-     PERSIST CHAT
-  ======================= */
   useEffect(() => {
-    sessionStorage.setItem("chat_messages", JSON.stringify(messages));
-  }, [messages]);
-
-  useEffect(() => {
-    if (messages.length > 0) setHasInteracted(true);
-  }, [messages]);
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isLoading, agentStatus]);
 
   const toggleTheme = () => {
     document.documentElement.classList.add("disable-transitions");
@@ -66,112 +88,113 @@ export function useChatLogic() {
       document.documentElement.classList.toggle("dark", next);
       return next;
     });
-    setTimeout(() => {
-      document.documentElement.classList.remove("disable-transitions");
-    }, 0);
+    setTimeout(
+      () => document.documentElement.classList.remove("disable-transitions"),
+      0
+    );
   };
 
-  /* =======================
-     REFS
-  ======================= */
-  const scrollRef = useRef(null);
-  const fileInputRef = useRef(null);
+  // --- 🔥 NEW CHAT LOGIC (SAVE OLD + RESET SESSION) ---
+  const startNewChat = () => {
+    // 1. Agar current chat mein kuch baat hui hai, toh history mein daalo
+    if (messages.length > 1) {
+      const firstUserMsg = messages.find((m) => m.role === "user");
+      const title = firstUserMsg
+        ? firstUserMsg.content.slice(0, 30) + "..."
+        : "New Conversation";
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading, fileQueue.length]);
+      const newHistoryItem = {
+        id: Date.now(),
+        title: title,
+        date: new Date().toLocaleDateString(),
+        messages: messages, // Save full thread
+      };
 
-  /* =======================
-     REAL FILE UPLOAD LOGIC
-  ======================= */
-  
-  const removeFileFromQueue = (id) => {
-    // Optional: If you want to delete the file from server when user clicks X, 
-    // you would trigger a DELETE request here using the id.
+      setChatHistory((prev) => [newHistoryItem, ...prev]);
+    }
+
+    // 2. Session Clear karo
+    sessionStorage.removeItem("current_chat_session");
+
+    // 3. State Reset karo
+    setMessages([
+      {
+        role: "agent",
+        content:
+          "Namaste! InstaLoan mein swagat hai. How can I help you today?",
+        suggestions: ["Personal Loan", "Student Loan (Info)"],
+        timestamp: "Now",
+      },
+    ]);
+    setInput("");
+    setFileQueue([]);
+    setCurrentAmount(0);
+    setHasInteracted(false);
+  };
+
+  // --- 📂 LOAD OLD CHAT ---
+  const loadChatFromHistory = (historyItem) => {
+    setMessages(historyItem.messages);
+    // Note: useEffect automatically saves this loaded chat to sessionStorage now
+    setHasInteracted(true);
+    if (isMobileMenuOpen) setIsMobileMenuOpen(false);
+  };
+
+  // --- CLEAR HISTORY ---
+  const clearHistory = () => {
+    setChatHistory([]);
+    localStorage.removeItem("instaloan_history");
+  };
+
+  // --- FILE & SEND LOGIC (Same as before) ---
+  const removeFileFromQueue = (id) =>
     setFileQueue((prev) => prev.filter((f) => f.id !== id));
-  };
 
-  // ✅ REAL UPLOAD FUNCTION
   const uploadFileToBackend = (fileItem) => {
     const formData = new FormData();
     formData.append("file", fileItem.file);
-
     const xhr = new XMLHttpRequest();
-    // Assuming your backend has this endpoint
     xhr.open("POST", `${API_URL}/upload`);
-
-    // 1. Track Progress
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const progress = Math.round((event.loaded / event.total) * 100);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const progress = Math.round((e.loaded / e.total) * 100);
         setFileQueue((prev) =>
-          prev.map((f) =>
-            f.id === fileItem.id ? { ...f, progress } : f
-          )
+          prev.map((f) => (f.id === fileItem.id ? { ...f, progress } : f))
         );
       }
     };
-
-    // 2. Handle Success
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        // Success!
-        console.log(`File "${fileItem.name}" has been successfully uploaded.`);
-        
         let responseData = {};
         try {
-            responseData = JSON.parse(xhr.responseText);
-        } catch (e) {
-            console.warn("Could not parse server response", e);
-        }
-
+          responseData = JSON.parse(xhr.responseText);
+        } catch (e) {}
         setFileQueue((prev) =>
           prev.map((f) =>
             f.id === fileItem.id
-              ? { 
-                  ...f, 
-                  progress: 100, 
+              ? {
+                  ...f,
+                  progress: 100,
                   status: "done",
-                  // Save any ID/Path returned by server so we can send it to the bot later
-                  serverData: responseData 
+                  serverData: responseData,
                 }
               : f
           )
         );
       } else {
-        // HTTP Error
-        console.error("Upload failed", xhr.statusText);
         setFileQueue((prev) =>
-          prev.map((f) => f.id === fileItem.id ? { ...f, status: "error", progress: 0 } : f)
+          prev.map((f) =>
+            f.id === fileItem.id ? { ...f, status: "error" } : f
+          )
         );
       }
     };
-
-    // 3. Handle Network Error
-    xhr.onerror = () => {
-      console.error("Network error during upload");
-      setFileQueue((prev) =>
-        prev.map((f) => f.id === fileItem.id ? { ...f, status: "error", progress: 0 } : f)
-      );
-    };
-
     xhr.send(formData);
   };
 
   const processFiles = (files) => {
     if (!files || files.length === 0) return;
-
     const newFiles = Array.from(files);
-    
-    // Calculate current total size
-    const currentTotalSize = fileQueue.reduce((acc, f) => acc + f.size, 0);
-    const newFilesTotalSize = newFiles.reduce((acc, f) => acc + f.size, 0);
-
-    if (currentTotalSize + newFilesTotalSize > MAX_TOTAL_SIZE_BYTES) {
-      alert(`Total file size cannot exceed ${MAX_TOTAL_SIZE_MB}MB per message.`);
-      return;
-    }
-
     const newQueueItems = newFiles.map((file) => ({
       id: crypto.randomUUID(),
       file,
@@ -180,125 +203,117 @@ export function useChatLogic() {
       type: file.type,
       progress: 0,
       status: "uploading",
-      serverData: null, // Will hold the backend response
+      serverData: null,
     }));
-
     setFileQueue((prev) => [...prev, ...newQueueItems]);
-
-    // Trigger REAL upload for each file
     newQueueItems.forEach((item) => uploadFileToBackend(item));
   };
 
   const handleFileUpload = (e) => {
-    const files = e.target.files;
-    processFiles(files);
+    processFiles(e.target.files);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isLoading) processFiles(e.dataTransfer.files);
+    },
+    [isLoading]
+  );
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isLoading) return;
-
-    const files = e.dataTransfer.files;
-    processFiles(files);
-  }, [fileQueue, isLoading]);
-
-
-  /* =======================
-     SEND MESSAGE
-  ======================= */
   const sendMessage = async (textOverride) => {
     if (isLoading) return;
-    
-    // Prevent send if files are still uploading or errored
-    if (fileQueue.some(f => f.status === 'uploading' || f.status === 'error')) {
-        alert("Please wait for uploads to finish or remove failed files.");
-        return;
-    }
-
     let textToSend = input;
     if (typeof textOverride === "string") textToSend = textOverride;
-    
-    // Allow send if there is text OR files
     if ((!textToSend || !textToSend.trim()) && fileQueue.length === 0) return;
 
-    // Prepare attachments with server data (path/id)
-    const attachments = fileQueue.map(f => ({
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        // Crucial: Pass the data returned by /upload (e.g., { fileId: 123, path: '/uploads/doc.pdf' })
-        // This ensures the Chat Bot knows exactly which file on the server to look at.
-        serverData: f.serverData 
+    const attachments = fileQueue.map((f) => ({
+      name: f.name,
+      type: f.type,
+      serverData: f.serverData,
     }));
 
     const userMsg = {
       role: "user",
       content: textToSend,
       attachments: attachments.length > 0 ? attachments : null,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      timestamp: "Now",
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setFileQueue([]); // Clear queue after send
+    setFileQueue([]);
     setIsLoading(true);
+    setAgentStatus("🕵️ Sales Agent: Understanding Intent...");
 
     try {
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            message: textToSend, 
-            attachments: attachments // Now includes the real server paths/IDs
-        }),
+        body: JSON.stringify({ message: textToSend, attachments }),
       });
 
       if (!response.ok) throw new Error();
-
       const data = await response.json();
 
+      if (data.action === "show_plans") {
+        setAgentStatus("🧮 Advisor Agent: Structuring Plans...");
+        await new Promise((r) => setTimeout(r, 800));
+      } else if (
+        data.reply.includes("Approved") ||
+        data.reply.includes("Rejected")
+      ) {
+        setAgentStatus("👮 Risk Agent: Analyzing Credit Score...");
+        await new Promise((r) => setTimeout(r, 1200));
+        setAgentStatus("⚖️ Compliance Agent: Finalizing...");
+        await new Promise((r) => setTimeout(r, 800));
+      }
+
+      setAgentStatus("✅ Responding...");
+      await new Promise((r) => setTimeout(r, 400));
+
       setMessages((prev) => [
         ...prev,
         {
           role: "agent",
-          content:
-            typeof data?.reply === "string"
-              ? data.reply
-              : "System Error: Could not connect to the server.",
-          meta: data?.meta ?? null,
-          action: data?.action ?? null,
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
+          content: data.reply || "System Error",
+          loanPlans: data.loanPlans || null,
+          suggestions: data.suggestions || null,
+          emiData: data.emiData || null,
+          meta: data.meta || null,
+          action: data.action || null,
+          amount: data.amount || 0,
+          timestamp: "Now",
         },
       ]);
-    } catch {
+      if (data.amount) setCurrentAmount(data.amount);
+    } catch (e) {
       setMessages((prev) => [
         ...prev,
-        {
-          role: "agent",
-          content: "System Error: Could not connect to the server.",
-          timestamp: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
+        { role: "agent", content: "⚠️ System Offline." },
       ]);
     } finally {
       setIsLoading(false);
+      setAgentStatus("");
     }
   };
 
-  /* =======================
-     DOWNLOAD
-  ======================= */
+  const handlePlanClick = (amount, months) => {
+    const msg = `Proceed with ${amount} for ${months} months`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: `Selected: ${months} Months Plan`,
+        timestamp: "Now",
+      },
+    ]);
+    sendMessage(msg);
+  };
+
   const downloadSanction = () => {
+    if (!currentAmount) return;
     window.open(
       `${API_URL}/download-sanction?amount=${currentAmount}`,
       "_blank"
@@ -310,6 +325,7 @@ export function useChatLogic() {
     input,
     setInput,
     isLoading,
+    agentStatus,
     fileQueue,
     removeFileFromQueue,
     isDesktopSidebarOpen,
@@ -324,6 +340,11 @@ export function useChatLogic() {
     handleDrop,
     sendMessage,
     handleFileUpload,
+    handlePlanClick,
     downloadSanction,
+    startNewChat,
+    chatHistory,
+    loadChatFromHistory,
+    clearHistory,
   };
 }

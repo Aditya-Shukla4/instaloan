@@ -29,31 +29,17 @@ const complianceAgent = new ComplianceAgent();
 // DB
 let applications = [];
 
-// --- 🧠 HYBRID BRAIN (FIXED: NO MORE HALLUCINATIONS) ---
+// --- 🧠 HYBRID BRAIN (COMMA FIX + SMART LOGIC) ---
 async function analyzeLoanRequest(userText) {
   try {
-    const lowerText = userText.toLowerCase();
+    // 1. CLEAN INPUT (Remove commas: "50,000" -> "50000")
+    const cleanText = userText.replace(/,/g, "").toLowerCase();
+    const rawText = userText; // Keep original for context if needed
 
     // ------------------------------------------------------
-    // 1️⃣ RULE ENGINE: HANDLE CHIP CLICKS (Personal/Student)
+    // PRIORITY 1: DETECT PLAN SELECTION (Button Click)
     // ------------------------------------------------------
-    if (
-      lowerText.includes("personal loan") ||
-      lowerText.includes("student loan")
-    ) {
-      return {
-        intent: "CHAT",
-        amount: 0,
-        reply:
-          "Great choice! To start, please tell me the Amount you need? (e.g. 50k, 2 Lakh)",
-        suggestions: ["50k", "1 Lakh", "5 Lakh"], // Next logical chips
-      };
-    }
-
-    // ------------------------------------------------------
-    // 2️⃣ RULE ENGINE: DETECT PLAN SELECTION (Final Step)
-    // ------------------------------------------------------
-    const proceedMatch = userText.match(/Proceed with (\d+) for (\d+) months/i);
+    const proceedMatch = userText.match(/Proceed with (\d+) for (\d+) months/i); // Keep original text for exact match
     if (proceedMatch) {
       return {
         intent: "LOAN_CONFIRM",
@@ -65,24 +51,68 @@ async function analyzeLoanRequest(userText) {
     }
 
     // ------------------------------------------------------
-    // 3️⃣ RULE ENGINE: DETECT LOAN AMOUNT & SHOW PLANS
+    // PRIORITY 2: DETECT SPECIFIC EMI CALCULATION (User asks "EMI for 5L")
     // ------------------------------------------------------
-    const amountMatch = userText.match(/(\d+)\s*(k|lakh)?/i);
+    const isEmiIntent =
+      cleanText.includes("emi") ||
+      cleanText.includes("calculate") ||
+      cleanText.includes("interest");
+    const amountMatch = cleanText.match(/(\d+)\s*(k|lakh|cr)?/i);
 
-    // Sirf tab trigger karo jab amount ho, aur user 'rate' ya 'interest' na pooch raha ho
-    if (
-      amountMatch &&
-      !lowerText.includes("rate") &&
-      !lowerText.includes("interest")
-    ) {
+    if (isEmiIntent && amountMatch) {
       let amount = 50000;
-      if (amountMatch) {
-        const unit = amountMatch[2] ? amountMatch[2].toLowerCase() : "";
-        const num = parseInt(amountMatch[1]);
-        if (unit === "k") amount = num * 1000;
-        else if (unit.includes("lakh")) amount = num * 100000;
-        else amount = num;
+      const unit = amountMatch[2] || "";
+      const num = parseInt(amountMatch[1]);
+      if (unit === "k") amount = num * 1000;
+      else if (unit.includes("lakh")) amount = num * 100000;
+      else if (unit.includes("cr")) amount = num * 10000000;
+      else amount = num;
+
+      // Tenure detection
+      const tenureMatch = cleanText.match(/(\d+)\s*(month|year|saal|mahine)/i);
+      let months = 12;
+      if (tenureMatch) {
+        months =
+          tenureMatch[2].startsWith("year") || tenureMatch[2].startsWith("saal")
+            ? parseInt(tenureMatch[1]) * 12
+            : parseInt(tenureMatch[1]);
       }
+
+      // Calculate
+      const r = 14 / 12 / 100;
+      const emi = Math.round(
+        (amount * r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1)
+      );
+      const totalPayable = emi * months;
+      const totalInterest = totalPayable - amount;
+
+      return {
+        intent: "EMI_CALC",
+        amount: amount,
+        reply: `Here is the mathematical breakdown for ₹${amount.toLocaleString()}:`,
+        emiData: {
+          emi: emi,
+          principal: amount,
+          interest: totalInterest,
+          total: totalPayable,
+          tenure: months,
+        },
+        source: "MATHS_ENGINE",
+      };
+    }
+
+    // ------------------------------------------------------
+    // PRIORITY 3: DETECT LOAN APPLICATION (User says "50000" or "50k")
+    // ------------------------------------------------------
+    // If user provided a number but didn't explicitly ask for "calculator", assume they want Plans.
+    if (amountMatch) {
+      let amount = 50000;
+      const unit = amountMatch[2] || "";
+      const num = parseInt(amountMatch[1]);
+      if (unit === "k") amount = num * 1000;
+      else if (unit.includes("lakh")) amount = num * 100000;
+      else if (unit.includes("cr")) amount = num * 10000000;
+      else amount = num;
 
       // Generate 3 Plans
       const rate = 14 / 12 / 100;
@@ -104,7 +134,23 @@ async function analyzeLoanRequest(userText) {
     }
 
     // ------------------------------------------------------
-    // 4️⃣ AI AGENT (Strict Instructions)
+    // PRIORITY 4: HANDLE CHIP CLICKS (Context Setting)
+    // ------------------------------------------------------
+    if (
+      cleanText.includes("personal loan") ||
+      cleanText.includes("student loan")
+    ) {
+      return {
+        intent: "CHAT",
+        amount: 0,
+        reply:
+          "Great choice! To start, please tell me the Amount you need? (e.g. 50k, 2 Lakh)",
+        suggestions: ["50k", "1 Lakh", "5 Lakh"],
+      };
+    }
+
+    // ------------------------------------------------------
+    // PRIORITY 5: AI AGENT (Strict Fallback)
     // ------------------------------------------------------
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -114,12 +160,12 @@ async function analyzeLoanRequest(userText) {
           role: "system",
           content: `
             Role: Honest Senior Loan Officer.
-            Goal: Guide user to give an AMOUNT. Do NOT give general info.
+            Goal: Get the loan amount from the user.
             
             Rules:
-            1. If user says "Hi" or "Hello", suggest "Personal Loan".
-            2. If user asks "Student Loan", reply: "Student Loans info is coming soon. Can we try Personal Loan?"
-            3. If user selects a loan type, ASK FOR AMOUNT.
+            1. If user says "Hi", suggest "Personal Loan".
+            2. If user asks vague questions like "Show me plans", ask "For which amount?".
+            3. Do NOT make up plans. Only ask for amount.
             
             Output JSON: { "intent": "CHAT", "reply": "string", "suggestions": ["string"] }
           `,
@@ -134,7 +180,7 @@ async function analyzeLoanRequest(userText) {
   } catch (error) {
     return {
       intent: "CHAT",
-      reply: "Please type the amount (e.g. 50k) to proceed.",
+      reply: "I missed that. Could you type the amount again? (e.g. 50000)",
       source: "FALLBACK_MODE",
     };
   }
@@ -145,19 +191,28 @@ app.post("/api/chat", async (req, res) => {
   const { message } = req.body;
   const aiResult = await analyzeLoanRequest(message);
 
-  // SCENARIO 1: Show Plans (Consultation Phase)
-  // 🔥 FIX: Sending 'action' explicitly to trigger UI Animation
+  // SCENARIO 1: Show Plans
   if (aiResult.intent === "SHOW_PLANS") {
     return res.json({
       reply: aiResult.reply,
       action: "show_plans",
       loanPlans: aiResult.loanPlans,
       amount: aiResult.amount,
-      suggestions: aiResult.suggestions, // if any
+      suggestions: aiResult.suggestions,
     });
   }
 
-  // SCENARIO 2: User Confirmed Plan
+  // SCENARIO 2: Show EMI Calculator Result
+  if (aiResult.intent === "EMI_CALC") {
+    return res.json({
+      reply: aiResult.reply,
+      action: "emi_calc",
+      emiData: aiResult.emiData,
+      amount: aiResult.amount,
+    });
+  }
+
+  // SCENARIO 3: User Confirmed Plan
   if (aiResult.intent === "LOAN_CONFIRM") {
     const riskDecision = riskAgent.evaluate(aiResult.amount);
     const auditLog = complianceAgent.generateAuditLog(
@@ -173,7 +228,6 @@ app.post("/api/chat", async (req, res) => {
       riskScore: riskDecision.score,
       factors: riskDecision.factors,
       auditData: auditLog,
-      // 🔥 SAVING DECISION SOURCE FOR ADMIN
       decisionSource: aiResult.source,
       date: new Date().toLocaleString(),
     };
@@ -199,7 +253,7 @@ app.post("/api/chat", async (req, res) => {
   res.json(aiResult);
 });
 
-// ... (Admin/Upload/PDF routes remain same as previous code) ...
+// ... (Rest of the routes remain same) ...
 app.post("/api/admin/action", (req, res) => {
   const { id, action } = req.body;
   const appIndex = applications.findIndex((a) => a.id == id);
